@@ -30,6 +30,7 @@ class OneHotEncoder(SklearnOneHotEncoder):
     """
 
     def __init__(self, **kwargs):
+        self.imputer = SimpleImputer(strategy='constant', copy=False)
         super(OneHotEncoder, self).__init__(**kwargs)
 
     def fit(self, X, **kwargs):
@@ -38,7 +39,7 @@ class OneHotEncoder(SklearnOneHotEncoder):
         None values.
         """
         self.attributes_ = list(X)
-        X = SimpleImputer(strategy='constant', copy=False).fit_transform(X)
+        X = self._adjust_types(X)
         return super().fit(X)
 
     def transform(self, X, **kwargs):
@@ -46,6 +47,7 @@ class OneHotEncoder(SklearnOneHotEncoder):
         Transform X using one-hot encoding. Additionally remove NaN indicator
         columns.
         """
+        X = self._adjust_types(X)
         X = super(OneHotEncoder, self).transform(X)
 
         # remove NaN indicator columns
@@ -61,6 +63,11 @@ class OneHotEncoder(SklearnOneHotEncoder):
 
         self.features_ = list(compress(feature_names_with_nan, idx))
         return X[:, idx]
+
+    def _adjust_types(self, X):
+        X = X.replace({True: 'True', False: 'False'})
+        X = self.imputer.fit_transform(X)
+        return X
 
 
 class TypeSelector(BaseEstimator, TransformerMixin):
