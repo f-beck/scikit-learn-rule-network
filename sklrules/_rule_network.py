@@ -6,6 +6,7 @@ import numpy as np
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 
@@ -87,7 +88,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     classes_ : list[str], shape (n_classes,)
         String names for the classes seen at :meth:`__preprocess_classes`.
 
-    target_class_name_ : str
+    output_feature_ : str
         String name for output feature.
 
     n_batches_ : int
@@ -180,12 +181,10 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
         # Preprocess classes
         target_class = self.__preprocess_classes(y)
-        self.y_ = y == target_class
-        self.target_class_name_ = target + '=' + target_class
+        self.output_feature_ = target + '=' + target_class
 
         # Initialize attributes
         self.X_ = X
-        self.y_ = y
         self.n_attributes_ = len(attributes)
         self.attributes_ = attributes
         self.attribute_lengths_ = attribute_lengths
@@ -247,13 +246,14 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             An array that holds True iff the corresponding sample in X is
             covered by at least one rule.
         """
-        # Check is fit had been called
+        # Check if fit had been called
         check_is_fitted(self)
 
         # Input validation
         X = check_array(X, dtype='bool')
 
-        return ~(~X @ self.and_layer_) @ self.or_layer_
+        y = (~(~X @ self.and_layer_) @ self.or_layer_).ravel()
+        return self.class_transformer_.inverse_transform(y)
 
     def __init_layers(self, X=None):
         """ Initialize the layers of the network according to the
@@ -326,6 +326,15 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             target_class = self.classes_[class_counts.argmax()]
         else:
             target_class = self.classes_[class_counts.argmin()]
+        self.class_transformer_ = LabelBinarizer()
+        self.y_ = self.class_transformer_.fit_transform(y).astype(bool)
+
+        # Adjust y and class order in label binarizer for correct inverse
+        # transformation
+        if self.classes_[0] != target_class:
+            self.y_ = ~self.y_
+            self.class_transformer_.classes_ = self.classes_[::-1]
+
         return str(target_class)
 
     def __optimize_rules(self, X, y):
