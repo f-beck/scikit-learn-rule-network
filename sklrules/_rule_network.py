@@ -229,12 +229,14 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                 self.batch_accuracies_[self.n_batches_ + 1]
 
         logging.info('Training finished.')
+        self.print_model()
 
         # Return the classifier
         return self
 
     def predict(self, X):
-        """ A reference implementation of a prediction for a classifier.
+        """ Predict output y for given input X by checking if any rule covers
+        the sample. Output will be inverse transformed to the original classes.
 
         Parameters
         ----------
@@ -255,6 +257,28 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
         y = (~(~X @ self.and_layer_) @ self.or_layer_).ravel()
         return self.class_transformer_.inverse_transform(y)
+
+    def print_model(self):
+        """ Print all rules in the model. """
+
+        # Check if fit had been called
+        check_is_fitted(self)
+
+        model_string = '\n--- MODEL ---'
+        for rule in range(self.n_rules):
+            if self.or_layer_[rule]:
+                model_string += '\nRule {} - {} :- '.format(
+                    rule + 1, self.output_feature_)
+                first = True
+                for feature in range(self.n_features_):
+                    if self.and_layer_[feature][rule]:
+                        if first:
+                            first = False
+                        else:
+                            model_string += ', '
+                        model_string += self.features_[feature]
+                model_string += '.'
+        logging.info(model_string)
 
     def __init_layers(self, X=None):
         """ Initialize the layers of the network according to the
