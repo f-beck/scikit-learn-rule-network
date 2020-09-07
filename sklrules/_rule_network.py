@@ -219,13 +219,14 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             self.batch_accuracies_[batch + 1] = self.__optimize_rules(X_mini,
                                                                       y_mini)
             if self.interim_train_accuracies:
-                self.train_accuracies_[batch + 1] = self.predict(X)
+                self.train_accuracies_[batch + 1] = accuracy_score(
+                    y, self.predict(X))
 
-        self.batch_accuracies_[self.n_batches_ + 2] = \
+        self.batch_accuracies_[self.n_batches_ + 1] = \
             self.__optimize_rule_set(X, y)
         if self.interim_train_accuracies:
-            self.train_accuracies_[self.n_batches_ + 2] = \
-                self.batch_accuracies_[self.n_batches_ + 2]
+            self.train_accuracies_[self.n_batches_ + 1] = \
+                self.batch_accuracies_[self.n_batches_ + 1]
 
         logging.info('Training finished.')
 
