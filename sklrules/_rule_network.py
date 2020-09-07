@@ -15,7 +15,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     Parameters
     ----------
-    init_method : {'probabilistic', 'support'}, default='support'
+    init_method : {'probabilistic', 'support'}, default='probabilistic'
         The method used to initialize the rules. Must be 'probabilistic' to
         initialize each attribute of a rule with a fixed probability or
         'support' if each rule should cover a fixed percentage of the samples.
@@ -112,7 +112,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         set after optimization.
     """
 
-    def __init__(self, init_method='support', n_rules=10, min_support=10,
+    def __init__(self, init_method='probabilistic', n_rules=10, min_support=10,
                  avg_rule_length=3, batch_size=50, max_flips=2,
                  max_rule_set_size=10, rule_head_class='least-frequent',
                  interim_train_accuracies=True, random_state=None):
