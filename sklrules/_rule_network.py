@@ -3,11 +3,9 @@ This is a module holding the rule network class
 """
 import logging
 import numpy as np
-import pandas as pd
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 
@@ -59,34 +57,41 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     Attributes
     ----------
     X_ : ndarray, shape (n_samples, n_features)
-        The input passed during :meth:`fit`.
+        The categorical, one-hot-encoded features of the training samples
+        passed during :meth:`fit`.
 
     y_ : ndarray, shape (n_samples,)
         The labels passed during :meth:`fit`.
 
-    classes_ : ndarray, shape (n_classes,)
-        The classes seen at :meth:`fit`.
-
-    n_batches_ : int
-        The number of batches used during :meth:`fit`.
-
     n_attributes_ : int
-        The number of attributes seen at :meth:`fit`.
+        The number of attributes passed during :meth:`fit`.
 
-    attribute_lengths_ : ndarray, shape (n_attributes,)
-        The number of unique values per attribute.
+    attributes_ : list[str] of shape (n_attributes,)
+        String names for (non-boolean) attributes passed during :meth:`fit`.
 
-    attribute_lengths_cumsum_ : ndarray, shape (n_attributes,)
+    attribute_lengths_ : list[int], shape (n_attributes,)
+        The number of unique values per attribute, passed during :meth:`fit`.
+
+    attribute_lengths_cumsum_ : list[int], shape (n_attributes,)
         The cumulative sum of attribute_lengths_, used as indexes for X_.
 
     n_features_ : int
         The number of features seen at :meth:`fit`.
 
-    feature_names_ : list of str of shape (n_features,)
-        String names for (boolean) features.
+    features_ : list[str], shape (n_features,)
+        String names for (boolean) features passed during :meth:`fit`.
+
+    n_classes_ : int
+        The number of classes seen at :meth:`__preprocess_classes`.
+
+    classes_ : list[str], shape (n_classes,)
+        String names for the classes seen at :meth:`__preprocess_classes`.
 
     target_class_name_ : str
         String name for output feature.
+
+    n_batches_ : int
+        The number of batches used during :meth:`fit`.
 
     and_layer_ : ndarray, shape (n_features, n_rules)
         The rules learned at :meth:`fit` as array.
@@ -122,11 +127,8 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self.interim_train_accuracies = interim_train_accuracies
         self.random_state = random_state
 
-    def _more_tags(self):
-        return {'allow_nan': True,
-                'binary_only': True}
-
-    def fit(self, X, y):
+    def fit(self, X, y, attributes=None, attribute_lengths=None,
+            features=None, target='class'):
         """ The fitting function creates binary layers adjusted to the
         size of the input (n_features). It learns a model by flipping
         the boolean values to create suitable rules.
@@ -137,6 +139,15 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             The training input samples.
         y : array-like, shape (n_samples,)
             The target values. An array of int.
+        attributes : list[str], default=None
+            The names of each attribute (in order of the original features in
+            X).
+        attribute_lengths : list[int], default=None
+            The cardinality of the attributes.
+        features : list[str], default=None
+            The names of each column after in order of the features in X.
+        target : str, default='class'
+            The name of the target.
 
         Returns
         -------
@@ -147,6 +158,41 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         # Check that X and y have correct shape
         X, y = check_X_y(X, y)
 
+        # Create dummy names/lengths for attributes and features if None were
+        # given
+        if attributes is None:
+            if attribute_lengths is None:
+                attributes = ['x%d' % i for i in range(X.shape[1])]
+            else:
+                attributes = ['x%d' % i for i in range(len(attribute_lengths))]
+        if attribute_lengths is None:
+            attribute_lengths = [1] * len(attributes)
+        if features is None:
+            features = attributes
+
+        # Check additional fit parameters
+        if len(attributes) != len(attribute_lengths):
+            raise ValueError('%s attributes, but %s attribute lengths are given'
+                             % (len(attributes), len(attribute_lengths)))
+        if len(features) != sum(attribute_lengths):
+            raise ValueError('%s features given, but attribute lengths sum up '
+                             'to %s)' % (len(features), sum(attribute_lengths)))
+
+        # Preprocess classes
+        target_class = self.__preprocess_classes(y)
+        self.y_ = y == target_class
+        self.target_class_name_ = target + '=' + target_class
+
+        # Initialize attributes
+        self.X_ = X
+        self.y_ = y
+        self.n_attributes_ = len(attributes)
+        self.attributes_ = attributes
+        self.attribute_lengths_ = attribute_lengths
+        self.attribute_lengths_cumsum_ = np.cumsum(self.attribute_lengths_)
+        self.n_features_ = len(features)
+        self.features_ = features
+
         # Calculate number of batches
         if self.batch_size > X.shape[0]:
             self.batch_size = X.shape[0]
@@ -154,10 +200,6 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                             'samples. Use single batch of size %s for '
                             'training.', self.batch_size)
         self.n_batches_ = X.shape[0] // self.batch_size
-
-        # Preprocess X and y
-        X = self.__preprocess_X(X)
-        y = self.__preprocess_y(y)
 
         # Initialize rule network layers
         self.__init_layers(X)
@@ -261,61 +303,30 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         logging.info('Initialization finished.')
         return self
 
-    def __preprocess_X(self, X):
-        """ One-hot-encode all non-numeric columns and store attribute and
-        feature names. Expects X to be a pandas DataFrame.
-
-        Parameters
-        ----------
-        X : pd.DataFrame, shape (n_samples, n_features)
-            The training input samples.
-
-        Returns
-        -------
-        X_ : ndarray, shape (n_samples, n_features)
-            The categorical, one-hot-encoded features of the training samples.
-        """
-        assert isinstance(X, pd.DataFrame)
-        X = X.select_dtypes(exclude='number').astype('object')
-        input_features = list(X)
-        self.n_attributes_ = X.shape[1]
-        one_hot_encoder = OneHotEncoder(sparse=False, dtype=np.bool,
-                                        handle_unknown='ignore')
-        self.X_ = one_hot_encoder.fit_transform(X)
-        self.n_features_ = X.shape[1]
-        self.feature_names_ = [feature.replace('_', '=') for feature in
-                               one_hot_encoder.get_feature_names(
-                                   input_features)]
-        self.attribute_lengths_ = list(map(len, one_hot_encoder.categories_))
-        self.attribute_lengths_cumsum_ = np.cumsum(self.attribute_lengths_)
-        return X
-
-    def __preprocess_y(self, y):
+    def __preprocess_classes(self, y):
         """ Store the classes seen during fit and choose target class based
-        on parameter rule_head_class. Expects y to be a pandas DataFrame.
+        on parameter rule_head_class.
 
         Parameters
         ----------
-        y : array-like, shape (n_samples,)
-            The target values. An array of int.
+        y : ndarray, shape (n_samples,)
+            The target values. An array of str.
 
         Returns
         -------
-        y_ : ndarray, shape (n_samples,)
-            The label for each sample is the label of the closest sample
-            seen during fit.
+        target_class : str
+            The class value that will be converted to True (all others to
+            False).
         """
-        assert isinstance(y, pd.DataFrame)
-        output_feature = list(y)
         self.classes_, class_counts = np.unique(y, return_counts=True)
+        self.n_classes_ = len(self.classes_)
         if self.rule_head_class == 'least-frequent':
             target_class = self.classes_[class_counts.argmin()]
         elif self.rule_head_class == 'most-frequent':
             target_class = self.classes_[class_counts.argmax()]
         else:
             target_class = self.classes_[class_counts.argmin()]
-        self.y_ = y == target_class
-        self.target_class_name_ = output_feature[0] + '=' + str(target_class)
+        return str(target_class)
 
     def __optimize_rules(self, X, y):
         """ This function optimizes the existing rules of the network to the
@@ -362,18 +373,18 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                 if dependent_features.size:
                     logging.debug('Rule %s - replaced %s with %s - accuracy '
                                   'increased from %s to %s', best_rule + 1,
-                                  self.feature_names_[dependent_features[0]],
-                                  self.feature_names_[best_feature],
+                                  self.features_[dependent_features[0]],
+                                  self.features_[best_feature],
                                   base_accuracy, best_accuracy)
                 elif self.and_layer_[best_feature][best_rule]:
                     logging.debug('Rule %s - added %s - accuracy increased '
                                   'from %s to %s', best_rule + 1,
-                                  self.feature_names_[best_feature],
+                                  self.features_[best_feature],
                                   base_accuracy, best_accuracy)
                 else:
                     logging.debug('Rule %s - removed %s - accuracy increased '
                                   'from %s to %s', best_rule + 1,
-                                  self.feature_names_[best_feature],
+                                  self.features_[best_feature],
                                   base_accuracy, best_accuracy)
                 base_accuracy = best_accuracy
         logging.debug('Rule optimization finished.')

@@ -15,15 +15,15 @@ class OneHotEncoder(SklearnOneHotEncoder):
 
     Attributes
     ----------
-    attributes_ : list of str
+    attributes_ : list[str]
         The names of each column (= attribute) determined during fitting (in
         order of the attributes in X).
 
-    attribute_lengths_ : list of int
+    attribute_lengths_ : list[int]
         The cardinality of the attributes, derived from ``categories_``
         attribute.
 
-    features_ : list of str
+    features_ : list[str]
         The names of each new column (=feature) determined after transforming
         (in order of the attributes in X and corresponding with the output of
         ``transform``).
