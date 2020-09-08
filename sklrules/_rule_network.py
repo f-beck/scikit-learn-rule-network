@@ -15,23 +15,30 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     Parameters
     ----------
-    init_method : {'probabilistic', 'support'}, default='probabilistic'
+    init_method : {'probabilistic', 'ripper', 'support'},
+    default='probabilistic'
         The method used to initialize the rules. Must be 'probabilistic' to
-        initialize each attribute of a rule with a fixed probability or
+        initialize each attribute of a rule with a fixed probability,
+        'ripper' to initialize the rule set with the one learned by RIPPER or
         'support' if each rule should cover a fixed percentage of the samples.
 
     n_rules : int, default=10
-        The maximum number of rules in the network.
-
-    min_support : int, default=10
-        The minimum number of samples covered by an initial rule. Only has an
-        effect if init_method='support'.
+        The maximum number of rules in the network. Will be set automatically
+        when init_method='ripper'.
 
     avg_rule_length : int, default=3
         The average number of conditions in an initial rule. Each attribute
         is set to a random value and added to the rule with a probability of
         3/|A| with |A| being the number of attributes. Only has an effect if
         init_method='probabilistic'.
+
+    ripper_model : wittgenstein.base.Ruleset, default=None
+        A ruleset computed by the RIPPER implementation wittgenstein. Only
+        has an effect if init_method='ripper'.
+
+    min_support : int, default=10
+        The minimum number of samples covered by an initial rule. Only has an
+        effect if init_method='support'.
 
     batch_size : int, default=50
         The number of samples per mini-batch.
@@ -42,7 +49,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     max_rule_set_size : int, default=10
         The maximum number of rules in the final rule set.
 
-    rule_head_class : {'least-frequent', 'most-frequent'},
+    pos_class_method : {'least-frequent', 'most-frequent'},
     default='least-frequent'
         The class chosen to be converted to True and to be the head of the
         generated rules.
@@ -112,21 +119,27 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         set after optimization.
     """
 
-    def __init__(self, init_method='probabilistic', n_rules=10, min_support=10,
-                 avg_rule_length=3, batch_size=50, max_flips=2,
-                 max_rule_set_size=10, rule_head_class='least-frequent',
+    def __init__(self, init_method='probabilistic', n_rules=10,
+                 avg_rule_length=3, ripper_model=None, min_support=10,
+                 batch_size=50, max_flips=2, max_rule_set_size=10,
+                 pos_class_method='least-frequent',
                  interim_train_accuracies=True, random_state=None):
         self.init_method = init_method
         self.n_rules = n_rules
-        self.min_support = min_support
         self.avg_rule_length = avg_rule_length
+        self.ripper_model = ripper_model
+        self.min_support = min_support
         self.batch_size = batch_size
         self.max_flips = max_flips
         self.max_rule_set_size = max_rule_set_size
         self.init_method = init_method
-        self.rule_head_class = rule_head_class
+        self.pos_class_method = pos_class_method
         self.interim_train_accuracies = interim_train_accuracies
         self.random_state = random_state
+
+        # Override number of rules if network is initialized with RIPPER model
+        if init_method == 'ripper' and ripper_model is not None:
+            self.n_rules = len(self.ripper_model)
 
     def fit(self, X, y, attributes=None, attribute_lengths=None,
             features=None, target='class'):
@@ -180,8 +193,8 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                              'to %s)' % (len(features), sum(attribute_lengths)))
 
         # Preprocess classes
-        target_class = self.__preprocess_classes(y)
-        self.output_feature_ = target + '=' + target_class
+        pos_class = self.__preprocess_classes(y)
+        self.output_feature_ = target + '=' + pos_class
 
         # Initialize attributes
         self.X_ = X
@@ -296,21 +309,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         """
         logging.info('Initializing network...')
         self.and_layer_ = np.zeros((self.n_features_, self.n_rules), dtype=bool)
-        if self.init_method == 'support':
-            for j in range(self.n_rules):
-                attribute_order = np.random.permutation(self.n_attributes_)
-                for i in attribute_order:
-                    feature_order = np.random.permutation(
-                        self.attribute_lengths_[i])
-                    for feature in feature_order:
-                        self.and_layer_[self.attribute_lengths_cumsum_[i] -
-                                        feature - 1][j] = True
-                        if self.__get_rule_support(X, j) > self.min_support:
-                            break
-                        else:
-                            self.and_layer_[self.attribute_lengths_cumsum_[i]
-                                            - feature - 1][j] = False
-        elif self.init_method == 'probabilistic':
+        if self.init_method == 'probabilistic':
             if self.avg_rule_length > self.n_attributes_:
                 self.avg_rule_length = self.n_attributes_
                 logging.warning('Average rule length was higher than number of '
@@ -324,13 +323,32 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                             self.attribute_lengths_[i])
                         self.and_layer_[self.attribute_lengths_cumsum_[i] -
                                         random_feature - 1][j] = True
+        elif self.init_method == 'ripper':
+            for j, rule in enumerate(self.ripper_model):
+                for cond in rule.conds:
+                    feature = self.features_.index(str(cond))#
+                    self.and_layer_[feature][j] = True
+        elif self.init_method == 'support':
+            for j in range(self.n_rules):
+                attribute_order = np.random.permutation(self.n_attributes_)
+                for i in attribute_order:
+                    feature_order = np.random.permutation(
+                        self.attribute_lengths_[i])
+                    for feature in feature_order:
+                        self.and_layer_[self.attribute_lengths_cumsum_[i] -
+                                        feature - 1][j] = True
+                        if self.__get_rule_support(X, j) > self.min_support:
+                            break
+                        else:
+                            self.and_layer_[self.attribute_lengths_cumsum_[i]
+                                            - feature - 1][j] = False
         self.or_layer_ = np.ones((self.n_rules, 1), dtype=bool)
         logging.info('Initialization finished.')
         return self
 
     def __preprocess_classes(self, y):
         """ Store the classes seen during fit and choose target class based
-        on parameter rule_head_class.
+        on parameter pos_class_method.
 
         Parameters
         ----------
@@ -339,28 +357,28 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        target_class : str
+        pos_class : str
             The class value that will be converted to True (all others to
             False).
         """
         self.classes_, class_counts = np.unique(y, return_counts=True)
         self.n_classes_ = len(self.classes_)
-        if self.rule_head_class == 'least-frequent':
-            target_class = self.classes_[class_counts.argmin()]
-        elif self.rule_head_class == 'most-frequent':
-            target_class = self.classes_[class_counts.argmax()]
+        if self.pos_class_method == 'least-frequent':
+            pos_class = self.classes_[class_counts.argmin()]
+        elif self.pos_class_method == 'most-frequent':
+            pos_class = self.classes_[class_counts.argmax()]
         else:
-            target_class = self.classes_[class_counts.argmin()]
+            pos_class = self.classes_[class_counts.argmin()]
         self.class_transformer_ = LabelBinarizer()
         self.y_ = self.class_transformer_.fit_transform(y).astype(bool)
 
         # Adjust y and class order in label binarizer for correct inverse
         # transformation
-        if self.classes_[0] != target_class:
+        if self.classes_[0] != pos_class:
             self.y_ = ~self.y_
             self.class_transformer_.classes_ = self.classes_[::-1]
 
-        return str(target_class)
+        return str(pos_class)
 
     def __optimize_rules(self, X, y):
         """ This function optimizes the existing rules of the network to the
