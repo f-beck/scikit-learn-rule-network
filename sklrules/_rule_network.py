@@ -326,8 +326,11 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         elif self.init_method == 'ripper':
             for j, rule in enumerate(self.ripper_model):
                 for cond in rule.conds:
-                    feature = self.features_.index(str(cond))#
-                    self.and_layer_[feature][j] = True
+                    try:
+                        feature = self.features_.index(str(cond))
+                        self.and_layer_[feature][j] = True
+                    except ValueError:
+                        pass  # ignore missing features
         elif self.init_method == 'support':
             for j in range(self.n_rules):
                 attribute_order = np.random.permutation(self.n_attributes_)
