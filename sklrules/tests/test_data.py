@@ -2,12 +2,14 @@ import numpy as np
 import pandas as pd
 import wittgenstein as lw
 
-from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklrules import OneHotEncoder, RuleNetworkClassifier, TypeSelector
+from tabulate import tabulate
 
 datasets = ['adult', 'airline-passenger-satisfaction', 'alpha-bank', 'bank',
             'breast-cancer', 'credit-g', 'hepatitis', 'kr-vs-kp',
             'mushroom', 'vote']
+datasets = ['vote']
 RANDOM_STATE = 0
 POS_CLASS_METHOD = 'least-frequent'
 
@@ -17,23 +19,6 @@ skf = StratifiedKFold(n_splits=5)
 
 
 def test():
-    for idx, dataset in enumerate(datasets):
-        print('\nDataset', dataset)
-        X, y, target = __process_dataset(dataset)
-        X = ts.fit_transform(X)
-        X = ohe.fit_transform(X).astype(bool)
-        fit_params = {
-            'attributes': ohe.attributes_,
-            'attribute_lengths': ohe.attribute_lengths_,
-            'features': ohe.features_,
-            'target': target
-        }
-        print('RNC(probabilistic):', cross_val_score(RuleNetworkClassifier(
-            pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
-            fit_params=fit_params))
-
-
-def test_ripper():
     ripper = lw.RIPPER(random_state=RANDOM_STATE)
     for idx, dataset in enumerate(datasets):
         print('\nDataset', dataset)
@@ -43,11 +28,12 @@ def test_ripper():
             pos_class = classes[class_counts.argmax()]
         else:
             pos_class = classes[class_counts.argmin()]
+        metrics = {}
         X = ts.fit_transform(X)
         ripper.fit(X, y, pos_class=pos_class)
         fit_params = {'pos_class': pos_class}
-        print('RIPPER:', cross_val_score(ripper, X, y, cv=skf,
-                                         fit_params=fit_params))
+        metrics_ripper = cross_validate(ripper, X, y, cv=skf,
+                                        fit_params=fit_params)
         X = ohe.fit_transform(X).astype(bool)
         fit_params = {
             'attributes': ohe.attributes_,
@@ -55,10 +41,18 @@ def test_ripper():
             'features': ohe.features_,
             'target': target
         }
-        print('RNC(RIPPER):', cross_val_score(RuleNetworkClassifier(
+        metrics_rnc_prob = cross_validate(RuleNetworkClassifier(
+            pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
+            fit_params=fit_params)
+        metrics_rnc_ripper = cross_validate(RuleNetworkClassifier(
             init_method='ripper', ripper_model=ripper.ruleset_,
             pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
-            fit_params=fit_params))
+            fit_params=fit_params)
+        for key in metrics_ripper:
+            metrics[key + '_RIPPER'] = metrics_ripper[key]
+            metrics[key + '_RNC_PROB'] = metrics_rnc_prob[key]
+            metrics[key + '_RNC_RIPPER'] = metrics_rnc_ripper[key]
+        print(tabulate(metrics, headers='keys'))
 
 
 def __process_dataset(dataset):
