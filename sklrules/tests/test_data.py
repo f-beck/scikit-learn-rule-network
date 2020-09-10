@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import wittgenstein as lw
 
+from collections import defaultdict
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklrules import OneHotEncoder, RuleNetworkClassifier, TypeSelector
 from tabulate import tabulate
@@ -9,26 +10,25 @@ from tabulate import tabulate
 datasets = ['adult', 'airline-passenger-satisfaction', 'alpha-bank', 'bank',
             'breast-cancer', 'credit-g', 'hepatitis', 'kr-vs-kp',
             'mushroom', 'vote']
-datasets = ['vote']
 RANDOM_STATE = 0
 POS_CLASS_METHOD = 'least-frequent'
 
 ts = TypeSelector(np.number, False)
 ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
-skf = StratifiedKFold(n_splits=5)
+skf = StratifiedKFold(n_splits=10)
 
 
 def test():
+    metrics = defaultdict(lambda: np.ndarray([0]))
     ripper = lw.RIPPER(random_state=RANDOM_STATE)
+    metrics['dataset'] = np.array(datasets)
     for idx, dataset in enumerate(datasets):
-        print('\nDataset', dataset)
         X, y, target = __process_dataset(dataset)
         classes, class_counts = np.unique(y, return_counts=True)
         if POS_CLASS_METHOD == 'most-frequent':
             pos_class = classes[class_counts.argmax()]
         else:
             pos_class = classes[class_counts.argmin()]
-        metrics = {}
         X = ts.fit_transform(X)
         ripper.fit(X, y, pos_class=pos_class)
         fit_params = {'pos_class': pos_class}
@@ -48,11 +48,15 @@ def test():
             init_method='ripper', ripper_model=ripper.ruleset_,
             pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
             fit_params=fit_params)
-        for key in metrics_ripper:
-            metrics[key + '_RIPPER'] = metrics_ripper[key]
-            metrics[key + '_RNC_PROB'] = metrics_rnc_prob[key]
-            metrics[key + '_RNC_RIPPER'] = metrics_rnc_ripper[key]
-        print(tabulate(metrics, headers='keys'))
+        for key in ('fit_time', 'score_time', 'test_score'):
+            metrics[key + '\nRIPPER'] = np.append(
+                metrics[key + '\nRIPPER'], np.average(metrics_ripper[key]))
+            metrics[key + '\nRNC_PROB'] = np.append(
+                metrics[key + '\nRNC_PROB'], np.average(metrics_rnc_prob[key]))
+            metrics[key + '\nRNC_RIPPER'] = np.append(
+                metrics[key + '\nRNC_RIPPER'], np.average(metrics_rnc_ripper[
+                                                              key]))
+    print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
 
 def __process_dataset(dataset):
