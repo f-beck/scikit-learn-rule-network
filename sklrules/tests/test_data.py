@@ -48,6 +48,10 @@ def test():
             init_method='ripper', ripper_model=ripper.ruleset_,
             pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
             fit_params=fit_params)
+        metrics_rnc_supp = cross_validate(RuleNetworkClassifier(
+            init_method='support',
+            max_flips=5, pos_class_method=POS_CLASS_METHOD), X, y,
+            cv=skf, fit_params=fit_params)
         for key in ('fit_time', 'score_time', 'test_score'):
             metrics[key + '\nRIPPER'] = np.append(
                 metrics[key + '\nRIPPER'], np.average(metrics_ripper[key]))
@@ -56,6 +60,8 @@ def test():
             metrics[key + '\nRNC_RIPPER'] = np.append(
                 metrics[key + '\nRNC_RIPPER'], np.average(metrics_rnc_ripper[
                                                               key]))
+            metrics[key + '\nRNC_SUPP'] = np.append(
+                metrics[key + '\nRNC_SUPP'], np.average(metrics_rnc_supp[key]))
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
 

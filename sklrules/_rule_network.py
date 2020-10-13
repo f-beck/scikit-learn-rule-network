@@ -9,6 +9,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
+logging.basicConfig(filename='output.log', level=logging.DEBUG)
+
 
 class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     """ A classifier which uses a network structure to learn rule sets.
@@ -36,9 +38,9 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         A ruleset computed by the RIPPER implementation wittgenstein. Only
         has an effect if init_method='ripper'.
 
-    min_support : int, default=10
-        The minimum number of samples covered by an initial rule. Only has an
-        effect if init_method='support'.
+    min_support : int, default=0.01
+        The minimum percentage of samples covered by an initial rule. Only
+        has an effect if init_method='support'.
 
     batch_size : int, default=50
         The number of samples per mini-batch.
@@ -120,7 +122,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     """
 
     def __init__(self, init_method='probabilistic', n_rules=10,
-                 avg_rule_length=3, ripper_model=None, min_support=10,
+                 avg_rule_length=3, ripper_model=None, min_support=0.01,
                  batch_size=50, max_flips=2, max_rule_set_size=10,
                  pos_class_method='least-frequent',
                  interim_train_accuracies=True, random_state=None):
@@ -214,7 +216,9 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self.n_batches_ = X.shape[0] // self.batch_size
 
         # Initialize rule network layers
-        self.__init_layers(X)
+        pos_mask = y == pos_class
+        X_pos = X[pos_mask]
+        self.__init_layers(X_pos)
 
         # Initialize arrays for storing accuracies
         self.batch_accuracies_ = np.empty(shape=(self.n_batches_ + 2,))
@@ -300,7 +304,8 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         X : array-like, shape (n_samples, n_features)
-            The input samples, used to determine rules with minimal support.
+            The positive input samples, used to determine rules with minimal
+            support.
 
         Returns
         -------
@@ -340,12 +345,18 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                     for feature in feature_order:
                         self.and_layer_[self.attribute_lengths_cumsum_[i] -
                                         feature - 1][j] = True
+                        logging.debug(self.features_[
+                                     self.attribute_lengths_cumsum_[i]
+                                            - feature -
+                                     1])
+                        logging.debug(self.__get_rule_support(X, j))
                         if self.__get_rule_support(X, j) > self.min_support:
                             break
                         else:
                             self.and_layer_[self.attribute_lengths_cumsum_[i]
                                             - feature - 1][j] = False
         self.or_layer_ = np.ones((self.n_rules, 1), dtype=bool)
+        self.print_model()
         logging.info('Initialization finished.')
         return self
 
