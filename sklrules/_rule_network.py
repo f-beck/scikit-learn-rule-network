@@ -9,8 +9,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
-logging.basicConfig(filename='output.log', level=logging.DEBUG)
-
 
 class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     """ A classifier which uses a network structure to learn rule sets.
@@ -126,6 +124,8 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                  batch_size=50, max_flips=2, max_rule_set_size=10,
                  pos_class_method='least-frequent',
                  interim_train_accuracies=True, random_state=None):
+        self._class_logger = logging.getLogger(__name__).getChild(
+            self.__class__.__name__)
         self.init_method = init_method
         self.n_rules = n_rules
         self.avg_rule_length = avg_rule_length
@@ -134,7 +134,6 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self.batch_size = batch_size
         self.max_flips = max_flips
         self.max_rule_set_size = max_rule_set_size
-        self.init_method = init_method
         self.pos_class_method = pos_class_method
         self.interim_train_accuracies = interim_train_accuracies
         self.random_state = random_state
@@ -210,9 +209,9 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         # Calculate number of batches
         if self.batch_size > X.shape[0]:
             self.batch_size = X.shape[0]
-            logging.warning('Batch size was higher than number of training '
-                            'samples. Use single batch of size %s for '
-                            'training.', self.batch_size)
+            self._class_logger.warning('Batch size was higher than number of '
+                                       'training samples. Use single batch of '
+                                       'size %s for training.', self.batch_size)
         self.n_batches_ = X.shape[0] // self.batch_size
 
         # Initialize rule network layers
@@ -227,10 +226,10 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             self.train_accuracies_ = np.empty_like(self.batch_accuracies_)
             self.train_accuracies_[0] = self.batch_accuracies_[0]
 
-        logging.info('Training network...')
+        self._class_logger.info('Training network...')
         for batch in range(self.n_batches_):
-            logging.debug('Processing mini-batch %s of %s...', batch + 1,
-                          self.n_batches_)
+            self._class_logger.debug('Processing mini-batch %s of %s...',
+                                     batch + 1, self.n_batches_)
             X_mini = X[batch * self.batch_size:(batch + 1) * self.batch_size]
             y_mini = y[batch * self.batch_size:(batch + 1) * self.batch_size]
             self.batch_accuracies_[batch + 1] = self.__optimize_rules(X_mini,
@@ -245,7 +244,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             self.train_accuracies_[self.n_batches_ + 1] = \
                 self.batch_accuracies_[self.n_batches_ + 1]
 
-        logging.info('Training finished.')
+        self._class_logger.info('Training finished.')
         self.print_model()
 
         # Return the classifier
@@ -295,7 +294,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                             model_string += ', '
                         model_string += self.features_[feature]
                 model_string += '.'
-        logging.info(model_string)
+        self._class_logger.info(model_string)
 
     def __init_layers(self, X=None):
         """ Initialize the layers of the network according to the
@@ -312,14 +311,15 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self : RuleNetworkClassifier
             Returns classifier with initialized network.
         """
-        logging.info('Initializing network...')
+        self._class_logger.info('Initializing network...')
         self.and_layer_ = np.zeros((self.n_features_, self.n_rules), dtype=bool)
         if self.init_method == 'probabilistic':
             if self.avg_rule_length > self.n_attributes_:
                 self.avg_rule_length = self.n_attributes_
-                logging.warning('Average rule length was higher than number of '
-                                'attributes. Use number of attributes as '
-                                'average rule length.', self.batch_size)
+                self._class_logger.warning('Average rule length was higher '
+                                           'than number of attributes. Use '
+                                           'number of attributes as average '
+                                           'rule length.')
             for j in range(self.n_rules):
                 for i in range(self.n_attributes_):
                     if np.random.random() < (self.avg_rule_length /
@@ -345,11 +345,10 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                     for feature in feature_order:
                         self.and_layer_[self.attribute_lengths_cumsum_[i] -
                                         feature - 1][j] = True
-                        logging.debug(self.features_[
+                        self._class_logger.debug(self.features_[
                                      self.attribute_lengths_cumsum_[i]
-                                            - feature -
-                                     1])
-                        logging.debug(self.__get_rule_support(X, j))
+                                     - feature - 1])
+                        self._class_logger.debug(self.__get_rule_support(X, j))
                         if self.__get_rule_support(X, j) > self.min_support:
                             break
                         else:
@@ -357,7 +356,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                                             - feature - 1][j] = False
         self.or_layer_ = np.ones((self.n_rules, 1), dtype=bool)
         self.print_model()
-        logging.info('Initialization finished.')
+        self._class_logger.info('Initialization finished.')
         return self
 
     def __preprocess_classes(self, y):
@@ -437,23 +436,26 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                                                          best_feature)
                 flip_count += 1
                 if dependent_features.size:
-                    logging.debug('Rule %s - replaced %s with %s - accuracy '
-                                  'increased from %s to %s', best_rule + 1,
-                                  self.features_[dependent_features[0]],
-                                  self.features_[best_feature],
-                                  base_accuracy, best_accuracy)
+                    self._class_logger.debug('Rule %s - replaced %s with %s - '
+                                             'accuracy increased from %s to %s',
+                                             best_rule + 1, self.features_
+                                             [dependent_features[0]],
+                                             self.features_[best_feature],
+                                             base_accuracy, best_accuracy)
                 elif self.and_layer_[best_feature][best_rule]:
-                    logging.debug('Rule %s - added %s - accuracy increased '
-                                  'from %s to %s', best_rule + 1,
-                                  self.features_[best_feature],
-                                  base_accuracy, best_accuracy)
+                    self._class_logger.debug('Rule %s - added %s - accuracy '
+                                             'increased from %s to %s',
+                                             best_rule + 1,
+                                             self.features_[best_feature],
+                                             base_accuracy, best_accuracy)
                 else:
-                    logging.debug('Rule %s - removed %s - accuracy increased '
-                                  'from %s to %s', best_rule + 1,
-                                  self.features_[best_feature],
-                                  base_accuracy, best_accuracy)
+                    self._class_logger.debug('Rule %s - removed %s - accuracy '
+                                             'increased from %s to %s',
+                                             best_rule + 1,
+                                             self.features_[best_feature],
+                                             base_accuracy, best_accuracy)
                 base_accuracy = best_accuracy
-        logging.debug('Rule optimization finished.')
+        self._class_logger.debug('Rule optimization finished.')
         return best_accuracy
 
     def __optimize_rule_set(self, X, y):
@@ -473,7 +475,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         best_accuracy : RuleNetworkClassifier
             Returns accuracy on training set (X, y).
         """
-        logging.debug('Optimizing rule set...')
+        self._class_logger.debug('Optimizing rule set...')
         self.or_layer_.fill(False)
         base_accuracy = accuracy_score(y, self.predict(X))
         best_accuracy = base_accuracy
@@ -494,15 +496,17 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                 self.__flip_rule(best_rule)
                 rule_count += 1
                 if self.or_layer_[best_rule]:
-                    logging.debug('Rule %s added - accuracy increased from '
-                                  '%s to %s', best_rule + 1, base_accuracy,
-                                  best_accuracy)
+                    self._class_logger.debug('Rule %s added - accuracy '
+                                             'increased from %s to %s',
+                                             best_rule + 1, base_accuracy,
+                                             best_accuracy)
                 else:
-                    logging.debug('Rule %s added - accuracy increased from '
-                                  '%s to %s', best_rule + 1, base_accuracy,
-                                  best_accuracy)
+                    self._class_logger.debug('Rule %s added - accuracy '
+                                             'increased from %s to %s',
+                                             best_rule + 1, base_accuracy,
+                                             best_accuracy)
                 base_accuracy = best_accuracy
-        logging.info('Training accuracy: %s', best_accuracy)
+        self._class_logger.info('Training accuracy: %s', best_accuracy)
         return best_accuracy
 
     def __get_rule_support(self, X, rule):
