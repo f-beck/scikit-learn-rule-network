@@ -88,7 +88,8 @@ def test():
             metrics_drnc = cross_validate(DeepRuleNetworkClassifier(
                 hidden_layer_sizes=[10, 5, 2],
                 pos_class_method=POS_CLASS_METHOD,
-                random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
+                random_state=RANDOM_STATE), X, y, cv=skf,
+                fit_params=fit_params, error_score='raise')
             _add_metrics(metrics_drnc, 'DRNC')
         if RNC_PROB:
             metrics_rnc_prob = cross_validate(RuleNetworkClassifier(

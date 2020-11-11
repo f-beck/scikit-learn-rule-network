@@ -2,6 +2,7 @@
 This is a module holding the rule network class
 """
 import logging
+import matplotlib.pyplot as plt
 import numpy as np
 
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -238,6 +239,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                 self.train_accuracies_[batch + 1] = accuracy_score(
                     y, self.predict(X))
 
+        self.batch_accuracies_[self.n_batches_ + 1] = self._optimize_coefs(X, y)
         if self.interim_train_accuracies:
             self.train_accuracies_[self.n_batches_ + 1] = \
                 self.batch_accuracies_[self.n_batches_ + 1]
@@ -245,8 +247,23 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self._class_logger.info('Training finished.')
         self.print_model()
 
+        self._plot_accuracy_graph()
+
         # Return the classifier
         return self
+
+    def _plot_accuracy_graph(self):
+        print(self.batch_accuracies_)
+        print(self.train_accuracies_)
+        batch_range = range(self.n_batches_ + 2)
+        plt.plot(batch_range, self.batch_accuracies_,
+                 label='mini-batch', linewidth='0.5')
+        plt.plot(batch_range, self.train_accuracies_,
+                 label='train set', linewidth='1')
+        plt.xlabel('Mini-batch')
+        plt.ylabel('Accuracy')
+        plt.legend(loc='lower right')
+        plt.show()
 
     def predict(self, X):
         """ Predict output y for given input X by checking if any rule covers
