@@ -48,10 +48,10 @@ RNC_SUPP = False
 
 ts = TypeSelector(np.number, False)
 ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
-skf = StratifiedKFold(n_splits=2)
+skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
 
 metrics = defaultdict(lambda: np.ndarray([0]))
-datasets = ['parity']
+datasets = ['parity_1000']
 
 
 def test():
@@ -87,25 +87,25 @@ def test():
         if DRNC:
             metrics_drnc = cross_validate(DeepRuleNetworkClassifier(
                 hidden_layer_sizes=[10, 5, 2],
-                pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
-                fit_params=fit_params, error_score='raise')
+                pos_class_method=POS_CLASS_METHOD,
+                random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
             _add_metrics(metrics_drnc, 'DRNC')
         if RNC_PROB:
             metrics_rnc_prob = cross_validate(RuleNetworkClassifier(
-                pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
-                fit_params=fit_params)
+                pos_class_method=POS_CLASS_METHOD,
+                random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
             _add_metrics(metrics_rnc_prob, 'RNC_PROB')
         if RNC_RIPPER:
             metrics_rnc_ripper = cross_validate(RuleNetworkClassifier(
                 init_method='ripper', ripper_model=ripper.ruleset_,
-                pos_class_method=POS_CLASS_METHOD), X, y, cv=skf,
-                fit_params=fit_params)
+                pos_class_method=POS_CLASS_METHOD,
+                random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
             _add_metrics(metrics_rnc_ripper, 'RNC_RIPPER')
         if RNC_SUPP:
             metrics_rnc_supp = cross_validate(RuleNetworkClassifier(
-                init_method='support',
-                max_flips=5, pos_class_method=POS_CLASS_METHOD), X, y,
-                cv=skf, fit_params=fit_params)
+                init_method='support', max_flips=5,
+                pos_class_method=POS_CLASS_METHOD,
+                random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
             _add_metrics(metrics_rnc_supp, 'RNC_SUPP')
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 

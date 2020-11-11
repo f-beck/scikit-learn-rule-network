@@ -8,7 +8,8 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils.extmath import safe_sparse_dot
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.validation import check_X_y, check_array, check_is_fitted, \
+    check_random_state
 
 
 class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
@@ -425,6 +426,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             Returns classifier with initialized network.
         """
         self._class_logger.info('Initializing network...')
+        random_state = check_random_state(self.random_state)
 
         self.layer_units = ([self.n_features_] + self.hidden_layer_sizes + [
             self.n_outputs_])
@@ -444,9 +446,9 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             if self.first_layer_conjunctive:
                 for k in range(self.layer_units[1]):
                     for attribute in range(self.n_attributes_):
-                        if np.random.random() < (self.avg_rule_length /
-                                                 self.n_attributes_):
-                            random_feature = np.random.randint(
+                        if random_state.random() < (self.avg_rule_length /
+                                                    self.n_attributes_):
+                            random_feature = random_state.randint(
                                 self.attribute_lengths_[attribute])
                             self.coefs_[0][self.attribute_lengths_cumsum_[
                                                attribute] -
@@ -461,10 +463,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             for i in range(self.first_layer_conjunctive * 1, self.n_layers - 2):
                 for attribute in range(self.layer_units[i]):
                     # guarantee at least one outgoing edge set to True
-                    k = np.random.randint(self.layer_units[i + 1])
+                    k = random_state.randint(self.layer_units[i + 1])
                     self.coefs_[i][attribute][k] = True
                     for k in range(self.layer_units[i + 1]):
-                        if np.random.random() < 0.2:
+                        if random_state.random() < 0.2:
                             self.coefs_[i][attribute][k] = True
 
         self._class_logger.info('Initialization finished.')
