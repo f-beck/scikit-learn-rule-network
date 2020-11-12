@@ -122,6 +122,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         mini-batch. The first element is the accuracy on the training set
         after initialization and the last one the accuracy on the training
         set after optimization.
+
+    random_state_ : int
+        A random number generator instance to define the state of the
+        random permutations generator.
     """
 
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
@@ -448,7 +452,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             Returns classifier with initialized network.
         """
         self._class_logger.info('Initializing network...')
-        random_state = check_random_state(self.random_state)
+        self.random_state_ = check_random_state(self.random_state)
 
         self.layer_units = ([self.n_features_] + self.hidden_layer_sizes + [
             self.n_outputs_])
@@ -468,9 +472,9 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             if self.first_layer_conjunctive:
                 for k in range(self.layer_units[1]):
                     for attribute in range(self.n_attributes_):
-                        if random_state.random() < (self.avg_rule_length /
-                                                    self.n_attributes_):
-                            random_feature = random_state.randint(
+                        if self.random_state_.random() < (
+                                self.avg_rule_length / self.n_attributes_):
+                            random_feature = self.random_state_.randint(
                                 self.attribute_lengths_[attribute])
                             self.coefs_[0][self.attribute_lengths_cumsum_[
                                                attribute] -
@@ -485,10 +489,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             for i in range(self.first_layer_conjunctive * 1, self.n_layers - 2):
                 for attribute in range(self.layer_units[i]):
                     # guarantee at least one outgoing edge set to True
-                    k = random_state.randint(self.layer_units[i + 1])
+                    k = self.random_state_.randint(self.layer_units[i + 1])
                     self.coefs_[i][attribute][k] = True
                     for k in range(self.layer_units[i + 1]):
-                        if random_state.random() < 0.2:
+                        if self.random_state_.random() < 0.2:
                             self.coefs_[i][attribute][k] = True
 
         self._class_logger.info('Initialization finished.')

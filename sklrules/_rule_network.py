@@ -118,6 +118,10 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         mini-batch. The first element is the accuracy on the training set
         after initialization and the last one the accuracy on the training
         set after optimization.
+
+    random_state_ : int
+        A random number generator instance to define the state of the
+        random permutations generator.
     """
 
     def __init__(self, init_method='probabilistic', n_rules=10,
@@ -313,7 +317,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             Returns classifier with initialized network.
         """
         self._class_logger.info('Initializing network...')
-        random_state = check_random_state(self.random_state)
+        self.random_state_ = check_random_state(self.random_state)
         self.and_layer_ = np.zeros((self.n_features_, self.n_rules), dtype=bool)
         if self.init_method == 'probabilistic':
             if self.avg_rule_length > self.n_attributes_:
@@ -324,9 +328,9 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                                            'rule length.')
             for j in range(self.n_rules):
                 for i in range(self.n_attributes_):
-                    if random_state.random() < (self.avg_rule_length /
-                                                self.n_attributes_):
-                        random_feature = random_state.randint(
+                    if self.random_state_.random() < (self.avg_rule_length /
+                                                      self.n_attributes_):
+                        random_feature = self.random_state_.randint(
                             self.attribute_lengths_[i])
                         self.and_layer_[self.attribute_lengths_cumsum_[i] -
                                         random_feature - 1][j] = True
@@ -340,9 +344,10 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                         pass  # ignore missing features
         elif self.init_method == 'support':
             for j in range(self.n_rules):
-                attribute_order = random_state.permutation(self.n_attributes_)
+                attribute_order = self.random_state_.permutation(
+                    self.n_attributes_)
                 for i in attribute_order:
-                    feature_order = random_state.permutation(
+                    feature_order = self.random_state_.permutation(
                         self.attribute_lengths_[i])
                     for feature in feature_order:
                         self.and_layer_[self.attribute_lengths_cumsum_[i] -
