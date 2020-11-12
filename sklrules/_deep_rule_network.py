@@ -53,6 +53,9 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         If True, after each batch the accuracy value on the training set will
         be measured and stored. Set False to save runtime.
 
+    plot_accuracies : bool, default=False
+        If True, after fit method the accuracy development will be plotted.
+
     random_state : int, default=None
         A random number generator instance to define the state of the
         random permutations generator.
@@ -124,7 +127,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
                  first_layer_conjunctive=True, avg_rule_length=3,
                  batch_size=50, max_flips=5, pos_class_method='least-frequent',
-                 interim_train_accuracies=True, random_state=None):
+                 interim_train_accuracies=True,
+                 plot_accuracies=False, random_state=None):
         if hidden_layer_sizes is None:
             hidden_layer_sizes = [10]
         self._class_logger = logging.getLogger(__name__).getChild(
@@ -142,6 +146,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self.max_flips = max_flips
         self.pos_class_method = pos_class_method
         self.interim_train_accuracies = interim_train_accuracies
+        self.plot_accuracies = plot_accuracies
         self.random_state = random_state
 
     def fit(self, X, y, attributes=None, attribute_lengths=None,
@@ -247,19 +252,19 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self._class_logger.info('Training finished.')
         self.print_model()
 
-        self._plot_accuracy_graph()
+        if self.plot_accuracies:
+            self._plot_accuracy_graph()
 
         # Return the classifier
         return self
 
     def _plot_accuracy_graph(self):
-        print(self.batch_accuracies_)
-        print(self.train_accuracies_)
         batch_range = range(self.n_batches_ + 2)
         plt.plot(batch_range, self.batch_accuracies_,
                  label='mini-batch', linewidth='0.5')
-        plt.plot(batch_range, self.train_accuracies_,
-                 label='train set', linewidth='1')
+        if self.interim_train_accuracies:
+            plt.plot(batch_range, self.train_accuracies_,
+                     label='train set', linewidth='1')
         plt.xlabel('Mini-batch')
         plt.ylabel('Accuracy')
         plt.legend(loc='lower right')
