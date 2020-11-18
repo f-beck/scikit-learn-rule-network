@@ -46,6 +46,9 @@ RNC_PROB = True
 RNC_RIPPER = False
 RNC_SUPP = False
 
+AVG_RULE_LENGTH_DRNC = 2
+AVG_RULE_LENGTH_RNC = 2
+
 ts = TypeSelector(np.number, False)
 ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
 skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
@@ -87,12 +90,14 @@ def test():
         if DRNC:
             metrics_drnc = cross_validate(DeepRuleNetworkClassifier(
                 hidden_layer_sizes=[10, 5, 2],
-                pos_class_method=POS_CLASS_METHOD,
+                avg_rule_length=AVG_RULE_LENGTH_DRNC,
+                pos_class_method=POS_CLASS_METHOD, plot_accuracies=True,
                 random_state=RANDOM_STATE), X, y, cv=skf,
                 fit_params=fit_params, error_score='raise')
             _add_metrics(metrics_drnc, 'DRNC')
         if RNC_PROB:
             metrics_rnc_prob = cross_validate(RuleNetworkClassifier(
+                avg_rule_length=AVG_RULE_LENGTH_RNC,
                 pos_class_method=POS_CLASS_METHOD,
                 random_state=RANDOM_STATE), X, y, cv=skf, fit_params=fit_params)
             _add_metrics(metrics_rnc_prob, 'RNC_PROB')
