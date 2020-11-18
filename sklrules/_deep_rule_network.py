@@ -307,15 +307,44 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
         return self.class_transformer_.inverse_transform(y_pred)
 
-    def print_model(self):
-        """ Print all rules in the model. """
+    def print_model(self, style='prolog'):
+        """ Print all rules in the model.
+
+        Parameters
+        ----------
+        style : {'prolog', 'tree'}
+            The style of the printed model. Must be 'prolog' to show a flat
+            logical structure or 'tree' to show a hierarchical structure.
+        """
 
         # Check if fit had been called
         check_is_fitted(self)
 
         model_string = '\n--- MODEL ---\n'
-        model_string += self._get_model_string(self.n_layers - 2, 0,
-                                               self.last_layer_conjunctive)
+        if style == 'prolog':
+            conjunctive = self.first_layer_conjunctive
+            for i in range(1, self.n_layers):
+                model_string += '\n'
+                connector = ', ' if conjunctive else '; '
+                for k in range(self.layer_units[i]):
+                    first = True
+                    model_string += 'l' + str(i) + 'n' + str(k + 1) + ' :- '
+                    for j in range(self.layer_units[i - 1]):
+                        if self.coefs_[i - 1][j][k]:
+                            if first:
+                                first = False
+                            else:
+                                model_string += connector
+                            if i == 1:
+                                model_string += self.features_[j]
+                            else:
+                                model_string += 'l' + str(i - 1) + 'n' + \
+                                                str(j + 1)
+                    model_string += '.\n'
+                conjunctive = not conjunctive
+        elif style == 'tree':
+            model_string += self._get_tree_string(self.n_layers - 2, 0,
+                                                  self.last_layer_conjunctive)
         self._class_logger.info(model_string)
 
     def _flip_feature(self, j, k, dependent_features=np.array([])):
@@ -405,7 +434,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         last_feature = self.attribute_lengths_cumsum_[attribute]
         return first_feature, last_feature
 
-    def _get_model_string(self, i, k, conjunctive):
+    def _get_tree_string(self, i, k, conjunctive):
         """ Compute recursively a formatted string for the model. The output
         will have a tree structure.
 
@@ -436,8 +465,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                         first = False
                     else:
                         model_string += connector
-                    model_string += self._get_model_string(i - 1, j,
-                                                           not conjunctive)
+                    model_string += self._get_tree_string(i - 1, j,
+                                                          not conjunctive)
             model_string += '\n' + '  ' * (self.n_layers - 2 - i) + ')'
 
         return model_string
