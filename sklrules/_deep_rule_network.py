@@ -320,7 +320,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         # Check if fit had been called
         check_is_fitted(self)
 
-        model_string = '\n--- MODEL ---\n'
+        header = '\n--- MODEL ---\n'
+        model_string = ''
         if style == 'prolog':
             conjunctive = self.first_layer_conjunctive
             for i in range(1, self.n_layers):
@@ -345,7 +346,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         elif style == 'tree':
             model_string += self._get_tree_string(self.n_layers - 2, 0,
                                                   self.last_layer_conjunctive)
-        self._class_logger.info(model_string)
+        self._class_logger.info(header + model_string)
+        return model_string
 
     def _flip_feature(self, j, k, dependent_features=np.array([])):
         """ Flip the value in the first layer depending whether a feature
@@ -456,17 +458,21 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         if i < 0:
             model_string = self.features_[k]
         else:
-            connector = ' && ' if conjunctive else ' || '
+            connector = ' & ' if conjunctive else ' | '
             model_string = '(\n' + '  ' * (self.n_layers - 1 - i)
             first = True
+            layer_string = ''
             for j in range(self.layer_units[i]):
                 if self.coefs_[i][j][k]:
                     if first:
                         first = False
                     else:
-                        model_string += connector
-                    model_string += self._get_tree_string(i - 1, j,
+                        layer_string += connector
+                    layer_string += self._get_tree_string(i - 1, j,
                                                           not conjunctive)
+            if not layer_string:
+                layer_string = 'True'
+            model_string += layer_string
             model_string += '\n' + '  ' * (self.n_layers - 2 - i) + ')'
 
         return model_string
