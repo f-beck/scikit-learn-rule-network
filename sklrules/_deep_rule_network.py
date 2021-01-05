@@ -230,7 +230,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self._init_layers()
 
         # Initialize arrays for storing accuracies
-        self.batch_accuracies_ = np.empty(shape=(self.n_batches_ + 2,))
+        self.batch_accuracies_ = np.empty(shape=(self.n_batches_ + 3,))
         self.batch_accuracies_[0] = accuracy_score(y, self.predict(X))
         if self.interim_train_accuracies:
             self.train_accuracies_ = np.empty_like(self.batch_accuracies_)
@@ -248,10 +248,19 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                 self.train_accuracies_[batch + 1] = accuracy_score(
                     y, self.predict(X))
 
+        # iterate an additional time over all samples in a single batch
         self.batch_accuracies_[self.n_batches_ + 1] = self._optimize_coefs(X, y)
         if self.interim_train_accuracies:
             self.train_accuracies_[self.n_batches_ + 1] = \
                 self.batch_accuracies_[self.n_batches_ + 1]
+
+        # optimize the last layer
+        self.batch_accuracies_[self.n_batches_ + 2] = \
+            self._optimize_last_layer(X, y)
+        if self.interim_train_accuracies:
+            self.train_accuracies_[self.n_batches_ + 2] = \
+                self.batch_accuracies_[self.n_batches_ + 2]
+
 
         self._class_logger.info('Training finished.')
         self.print_model()
@@ -559,7 +568,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         flip_count = 0
 
         while not optimal and flip_count < self.max_flips:
-            flipped = False
+            optimal = True
 
             # evaluate flips in the first layer
             for k in range(self.layer_units[1]):
@@ -569,28 +578,28 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                         dependent_j = self._flip_feature(j, k)
                         accuracy = accuracy_score(y, self.predict(X))
                         if accuracy > best_accuracy:
-                            flipped = True
+                            optimal = False
                             best_accuracy = accuracy
                             best_i = 0
                             best_j = j
                             best_k = k
                         self._flip_feature(j, k, dependent_j)
 
-            # evaluate flips in all other layers
+            # evaluate flips in all other layers (except the last one)
             for i in range(1, self.n_layers - 2):
                 for j in range(self.layer_units[i]):
                     for k in range(self.layer_units[i + 1]):
                         self.coefs_[i][j][k] = not self.coefs_[i][j][k]
                         accuracy = accuracy_score(y, self.predict(X))
                         if accuracy > best_accuracy:
-                            flipped = True
+                            optimal = False
                             best_accuracy = accuracy
                             best_i = i
                             best_j = j
                             best_k = k
                         self.coefs_[i][j][k] = not self.coefs_[i][j][k]
 
-            if flipped:
+            if not optimal:
                 # specific output for first layer
                 if best_i == 0:
                     dependent_j = self._flip_feature(best_j, best_k)
@@ -631,8 +640,55 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
                 flip_count += 1
                 base_accuracy = best_accuracy
-            optimal = not flipped
 
+        return best_accuracy
+
+    def _optimize_last_layer(self, X, y):
+        """ This function optimizes the existing network by setting the coefs
+        in the last layer to False and then greedily adding rules to the set
+        until no improvement is achieved.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            The training input samples.
+        y : array-like, shape (n_samples,)
+            The target values. An array of int.
+
+        Returns
+        -------
+        best_accuracy : RuleNetworkClassifier
+            Returns accuracy on training set (X, y).
+        """
+        self._class_logger.info('Optimizing last layer...')
+
+        # set all coefs in the last layer to False
+        for j in range(self.layer_units[self.n_layers - 2]):
+            self.coefs_[self.n_layers - 2][j][0] = False
+
+        # evaluate all flips to True in last layer
+        base_accuracy = accuracy_score(y, self.predict(X))
+        best_accuracy = base_accuracy
+        best_j = None
+        optimal = False
+        while not optimal:
+            optimal = True
+            for j in range(self.layer_units[self.n_layers - 2]):
+                if not self.coefs_[self.n_layers - 2][j][0]:
+                    self.coefs_[self.n_layers - 2][j][0] = True
+                    accuracy = accuracy_score(y, self.predict(X))
+                    if accuracy > best_accuracy:
+                        optimal = False
+                        best_accuracy = accuracy
+                        best_j = j
+                    self.coefs_[self.n_layers - 2][j][0] = False
+            if not optimal:
+                self.coefs_[self.n_layers - 2][best_j][0] = True
+                self._class_logger.debug(
+                    'Connection/Rule %s added - accuracy increased from %s to '
+                    '%s', best_j + 1, base_accuracy, best_accuracy)
+                base_accuracy = best_accuracy
+        self._class_logger.info('Training accuracy: %s', best_accuracy)
         return best_accuracy
 
     def _preprocess_classes(self, y):
