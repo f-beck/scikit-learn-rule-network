@@ -508,7 +508,7 @@ class RuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                                              best_rule + 1, base_accuracy,
                                              best_accuracy)
                 else:
-                    self._class_logger.debug('Rule %s added - accuracy '
+                    self._class_logger.debug('Rule %s removed - accuracy '
                                              'increased from %s to %s',
                                              best_rule + 1, base_accuracy,
                                              best_accuracy)
