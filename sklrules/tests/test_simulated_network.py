@@ -3,12 +3,13 @@ import itertools
 import logging
 import numpy as np
 import pandas as pd
+import re
 import sys
 
 from collections import defaultdict
 from sklearn.model_selection import cross_validate, StratifiedKFold
-from sklrules import DeepRuleNetworkClassifier, OneHotEncoder, \
-    RuleNetworkClassifier, TypeSelector
+from sklrules import DeepRuleNetworkClassifier, OneHotEncoder, TypeSelector
+from sympy.logic.boolalg import to_dnf
 from tabulate import tabulate
 
 
@@ -40,7 +41,7 @@ def _setup_logging():
 
 _setup_logging()
 
-RANDOM_STATE = 0
+RANDOM_STATE = 0  # only used for StratifiedKFold
 N_REPETITIONS = 1
 POS_CLASS_METHOD = 'boolean'  # 'boolean', 'least-frequent' or 'most-frequent'
 AVG_RULE_LENGTH_DRNC = 2
@@ -85,34 +86,61 @@ def test():
         metrics['positive\nratio'] = \
             np.append(metrics['positive\nratio'], pos_ratio)
 
+        drnc1_model = drnc1.print_model(style='tree')
+        print(_to_sympy_syntax(drnc1_model))
+        print(_get_simplified_model(_to_sympy_syntax(drnc1_model)))
+
         drnc2 = DeepRuleNetworkClassifier(
             hidden_layer_sizes=HIDDEN_LAYER_SIZES,
             avg_rule_length=AVG_RULE_LENGTH_DRNC,
             pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
         metrics_drnc = cross_validate(drnc2, X, y, cv=skf,
+                                      return_estimator=True,
                                       fit_params=fit_params)
         _add_metrics(metrics_drnc, 'DRNC')
+        _print_estimator_model(metrics_drnc)
 
-        rnc1 = RuleNetworkClassifier(
-            n_rules=N_RULES, avg_rule_length=AVG_RULE_LENGTH_RNC_1,
-            pos_class_method=POS_CLASS_METHOD, random_state=RANDOM_STATE)
-        metrics_rnc = cross_validate(rnc1, X, y, cv=skf, fit_params=fit_params)
-        _add_metrics(metrics_rnc, 'RNC1')
+        rnc1 = DeepRuleNetworkClassifier(
+            hidden_layer_sizes=[N_RULES], avg_rule_length=AVG_RULE_LENGTH_RNC_1,
+            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
+        metrics_rnc1 = cross_validate(rnc1, X, y, cv=skf,
+                                      return_estimator=True,
+                                      fit_params=fit_params)
+        _add_metrics(metrics_rnc1, 'RNC1')
+        _print_estimator_model(metrics_rnc1)
 
-        rnc2 = RuleNetworkClassifier(
-            n_rules=N_RULES, avg_rule_length=AVG_RULE_LENGTH_RNC_2,
-            pos_class_method=POS_CLASS_METHOD, random_state=RANDOM_STATE)
-        metrics_rnc = cross_validate(rnc2, X, y, cv=skf, fit_params=fit_params)
-        _add_metrics(metrics_rnc, 'RNC2')
+        rnc2 = DeepRuleNetworkClassifier(
+            hidden_layer_sizes=[N_RULES], avg_rule_length=AVG_RULE_LENGTH_RNC_2,
+            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
+        metrics_rnc2 = cross_validate(rnc2, X, y, cv=skf,
+                                      return_estimator=True,
+                                      fit_params=fit_params)
+        _add_metrics(metrics_rnc2, 'RNC2')
+        _print_estimator_model(metrics_rnc2)
 
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
-    drnc1.print_model(style='tree')
 
 
 def _add_metrics(metrics_learner, name):
     for key in ('fit_time', 'test_score'):
         metrics[key + '\n' + name] = np.append(
             metrics[key + '\n' + name], np.average(metrics_learner[key]))
+
+
+def _get_simplified_model(model):
+    return str(to_dnf(model, True, True))
+
+
+def _to_sympy_syntax(f):
+    f = re.sub(r'(\S+)=True', r'\1', f)
+    f = re.sub(r'(\S+)=False', r'~\1', f)
+    return f
+
+
+def _print_estimator_model(metrics_learner):
+    model = metrics_learner['estimator'][0].print_model(style='tree')
+    print(_to_sympy_syntax(model))
+    print(_get_simplified_model(_to_sympy_syntax(model)))
 
 
 def _process_dataset(dataset):
