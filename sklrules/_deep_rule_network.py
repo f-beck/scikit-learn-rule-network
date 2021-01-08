@@ -28,7 +28,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         The number of nodes per layer in the network. Does not include
         size for the input and output layer which will be set automatically.
 
-    first_layer_conjunctive: bool, default=True
+    first_layer_conjunctive : bool, default=True
         The type of the first layer in the network. Must be True to emulate a
         conjunctive ('and') behavior or False for a disjunctive ('or') behavior.
 
@@ -37,6 +37,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         is set to a random value and added to the rule with a probability of
         3/|A| with |A| being the number of attributes. Only has an effect if
         init_method='probabilistic'.
+
+    init_prob : float, default=0.2
+        The probability of each initial weight in the network to be True (apart
+        from first layer). Only has an effect if init_method='probabilistic'.
 
     batch_size : int, default=50
         The number of samples per mini-batch.
@@ -130,7 +134,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
                  first_layer_conjunctive=True, avg_rule_length=3,
-                 batch_size=50, max_flips=5, pos_class_method='least-frequent',
+                 init_prob=0.2, batch_size=50, max_flips=5,
+                 pos_class_method='least-frequent',
                  interim_train_accuracies=True,
                  plot_accuracies=False, random_state=None):
         if hidden_layer_sizes is None:
@@ -146,6 +151,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         else:
             self.last_layer_conjunctive = first_layer_conjunctive
         self.avg_rule_length = avg_rule_length
+        self.init_prob = init_prob
         self.batch_size = batch_size
         self.max_flips = max_flips
         self.pos_class_method = pos_class_method
@@ -536,7 +542,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                     k = self.random_state_.randint(self.layer_units[i + 1])
                     self.coefs_[i][attribute][k] = True
                     for k in range(self.layer_units[i + 1]):
-                        if self.random_state_.random() < 0.2:
+                        if self.random_state_.random() < self.init_prob:
                             self.coefs_[i][attribute][k] = True
 
         self._class_logger.info('Initialization finished.')
