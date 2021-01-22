@@ -278,18 +278,39 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     def plot_accuracy_graph(self, fig=None, ax=None, graph_label='train set',
                             include_batch_accuracies=False):
+        """ Plots a graph with
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            The top level container for all plot elements.
+        ax : matplotlib.axes.Axes
+            An object containing graphs, labels and legend.
+        graph_label : str, default='train set'
+            The name of the graph to be added.
+        include_batch_accuracies : bool, default=False
+            A flag if the accuracies on the mini-batch itself should be
+            included in a second graph.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The top level container for all plot elements.
+        ax : matplotlib.axes.Axes
+            An object containing graphs, labels and legend.
+        """
         if fig is None or ax is None:
             fig, ax = plt.subplots()
             ax.set(xlabel='Mini-batch', ylabel='Accuracy',
                    title='Accuracy over number of mini-batches')
         batch_range = range(self.n_batches_ + 3)
         if include_batch_accuracies:
-            ax.plot(batch_range, self.batch_accuracies_, label='mini-batch',
-                    linewidth='0.5')
+            ax.plot(batch_range, self.batch_accuracies_,
+                    label='mini-batch ' + graph_label, linewidth='0.5')
         if self.interim_train_accuracies:
             ax.plot(batch_range, self.train_accuracies_, label=graph_label,
                     linewidth='1')
-        ax.legend(loc='lower right')
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         return fig, ax
 
     def predict(self, X):
@@ -333,6 +354,11 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         style : {'prolog', 'tree'}
             The style of the printed model. Must be 'prolog' to show a flat
             logical structure or 'tree' to show a hierarchical structure.
+
+        Returns
+        -------
+        model_string : str
+            The string of the model without header for further processing.
         """
 
         # Check if fit had been called
