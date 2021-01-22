@@ -267,27 +267,30 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             self.train_accuracies_[self.n_batches_ + 2] = \
                 self.batch_accuracies_[self.n_batches_ + 2]
 
-
         self._class_logger.info('Training finished.')
         self.print_model()
 
         if self.plot_accuracies:
-            self._plot_accuracy_graph()
+            self.plot_accuracy_graph()
 
         # Return the classifier
         return self
 
-    def _plot_accuracy_graph(self):
-        batch_range = range(self.n_batches_ + 2)
-        plt.plot(batch_range, self.batch_accuracies_,
-                 label='mini-batch', linewidth='0.5')
+    def plot_accuracy_graph(self, fig=None, ax=None, graph_label='train set',
+                            include_batch_accuracies=False):
+        if fig is None or ax is None:
+            fig, ax = plt.subplots()
+            ax.set(xlabel='Mini-batch', ylabel='Accuracy',
+                   title='Accuracy over number of mini-batches')
+        batch_range = range(self.n_batches_ + 3)
+        if include_batch_accuracies:
+            ax.plot(batch_range, self.batch_accuracies_, label='mini-batch',
+                    linewidth='0.5')
         if self.interim_train_accuracies:
-            plt.plot(batch_range, self.train_accuracies_,
-                     label='train set', linewidth='1')
-        plt.xlabel('Mini-batch')
-        plt.ylabel('Accuracy')
-        plt.legend(loc='lower right')
-        plt.show()
+            ax.plot(batch_range, self.train_accuracies_, label=graph_label,
+                    linewidth='1')
+        ax.legend(loc='lower right')
+        return fig, ax
 
     def predict(self, X):
         """ Predict output y for given input X by checking if any rule covers
