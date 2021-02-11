@@ -42,11 +42,22 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         The probability of each initial weight in the network to be True (apart
         from first layer). Only has an effect if init_method='probabilistic'.
 
-    batch_size : int, default=50
-        The number of samples per mini-batch.
+    n_epochs : int, default=None
+        The number of repetitions the data is passed through the network. If
+        None, the training will be stopped if the accuracy did not increase
+        in the last epoch.
 
-    max_flips : int, default=2
-        The maximum number of flips per mini-batch.
+    batch_size : int, default=None
+        The number of samples per mini-batch. If None, all samples will be
+        processed in a single batch.
+
+    max_flips : int, default=None
+        The maximum number of flips per mini-batch. If None, the network will
+        be (over)fitted as close as possible to the current mini-batch.
+
+    optimize_last_layer_separately : bool, default=False
+        If True, the last layer will be optimized in a separate step after
+        all other layers.
 
     pos_class_method : {'least-frequent', 'most-frequent'},
     default='least-frequent'
@@ -134,7 +145,8 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
                  first_layer_conjunctive=True, avg_rule_length=3,
-                 init_prob=0.2, batch_size=50, max_flips=5,
+                 init_prob=0.2, n_epochs=None, batch_size=50, max_flips=None,
+                 optimize_last_layer_separately=False,
                  pos_class_method='least-frequent',
                  interim_train_accuracies=True,
                  plot_accuracies=False, random_state=None):
@@ -152,8 +164,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             self.last_layer_conjunctive = first_layer_conjunctive
         self.avg_rule_length = avg_rule_length
         self.init_prob = init_prob
+        self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.max_flips = max_flips
+        self.optimize_last_layer_separately = optimize_last_layer_separately
         self.pos_class_method = pos_class_method
         self.interim_train_accuracies = interim_train_accuracies
         self.plot_accuracies = plot_accuracies
@@ -225,47 +239,74 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         self.n_outputs_ = 1
 
         # Calculate number of batches
-        if self.batch_size > X.shape[0]:
-            self.batch_size = X.shape[0]
+        batch_size = (X.shape[0] if self.batch_size is None else
+                      self.batch_size)
+        if batch_size > X.shape[0]:
+            batch_size = X.shape[0]
             self._class_logger.warning('Batch size was higher than number of '
                                        'training samples. Use single batch of '
                                        'size %s for training.', self.batch_size)
-        self.n_batches_ = X.shape[0] // self.batch_size
+        self.n_batches_ = X.shape[0] // batch_size
 
         # Initialize rule network layers
         self._init_layers()
 
         # Initialize arrays for storing accuracies
-        self.batch_accuracies_ = np.empty(shape=(self.n_batches_ + 3,))
-        self.batch_accuracies_[0] = accuracy_score(y, self.predict(X))
+        new_accuracy = accuracy_score(y, self.predict(X))
+        acc_array_size = self.n_batches_ + \
+            self.optimize_last_layer_separately + 2
+        self.batch_accuracies_ = np.empty(shape=(acc_array_size,))
+        self.batch_accuracies_[0] = new_accuracy
         if self.interim_train_accuracies:
             self.train_accuracies_ = np.empty_like(self.batch_accuracies_)
             self.train_accuracies_[0] = self.batch_accuracies_[0]
 
         self._class_logger.info('Training network...')
-        for batch in range(self.n_batches_):
-            self._class_logger.debug('Processing mini-batch %s of %s...',
-                                     batch + 1, self.n_batches_)
-            X_mini = X[batch * self.batch_size:(batch + 1) * self.batch_size]
-            y_mini = y[batch * self.batch_size:(batch + 1) * self.batch_size]
-            self.batch_accuracies_[batch + 1] = self._optimize_coefs(X_mini,
-                                                                     y_mini)
-            if self.interim_train_accuracies:
-                self.train_accuracies_[batch + 1] = accuracy_score(
-                    y, self.predict(X))
+        n_epochs = (np.iinfo(np.int32).max if self.n_epochs is None else
+                    self.n_epochs)
+        for epoch in range(n_epochs):
+            # number of iterations done so far
+            it = (self.n_batches_ + self.optimize_last_layer_separately) * epoch
+
+            old_accuracy = new_accuracy
+            self._class_logger.debug('Processing epoch %s of %s...', epoch +
+                                     1, self.n_epochs)
+            for batch in range(self.n_batches_):
+                self._class_logger.debug('Processing mini-batch %s of %s...',
+                                         batch + 1, self.n_batches_)
+                X_mini = X[batch * batch_size:(batch + 1) * batch_size]
+                y_mini = y[batch * batch_size:(batch + 1) * batch_size]
+                self.batch_accuracies_[it + batch + 1] = \
+                    self._optimize_coefs(X_mini, y_mini)
+                if self.interim_train_accuracies:
+                    self.train_accuracies_[it + batch + 1] = accuracy_score(
+                        y, self.predict(X))
+
+            # optimize the last layer
+            if self.optimize_last_layer_separately:
+                self.batch_accuracies_[it + self.n_batches_ + 1] = \
+                    self._optimize_last_layer(X, y)
+                if self.interim_train_accuracies:
+                    self.train_accuracies_[it + self.n_batches_ + 1] = \
+                        self.batch_accuracies_[it + self.n_batches_ + 1]
+
+            np.set_printoptions(suppress=True)
+            new_accuracy = accuracy_score(y, self.predict(X))
+            if new_accuracy <= old_accuracy:
+                break
+
+            # if new epoch, expand arrays to store more accuracies
+            self.batch_accuracies_ = \
+                np.concatenate((self.batch_accuracies_, np.empty(shape=(
+                    self.n_batches_ + self.optimize_last_layer_separately,))))
+            self.train_accuracies_ = \
+                np.concatenate((self.train_accuracies_, np.empty(shape=(
+                    self.n_batches_ + self.optimize_last_layer_separately,))))
 
         # iterate an additional time over all samples in a single batch
-        self.batch_accuracies_[self.n_batches_ + 1] = self._optimize_coefs(X, y)
+        self.batch_accuracies_[-1] = self._optimize_coefs(X, y)
         if self.interim_train_accuracies:
-            self.train_accuracies_[self.n_batches_ + 1] = \
-                self.batch_accuracies_[self.n_batches_ + 1]
-
-        # optimize the last layer
-        self.batch_accuracies_[self.n_batches_ + 2] = \
-            self._optimize_last_layer(X, y)
-        if self.interim_train_accuracies:
-            self.train_accuracies_[self.n_batches_ + 2] = \
-                self.batch_accuracies_[self.n_batches_ + 2]
+            self.train_accuracies_[-1] = self.batch_accuracies_[-1]
 
         self._class_logger.info('Training finished.')
         self.print_model()
@@ -303,7 +344,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             fig, ax = plt.subplots()
             ax.set(xlabel='Mini-batch', ylabel='Accuracy',
                    title='Accuracy over number of mini-batches')
-        batch_range = range(self.n_batches_ + 3)
+        batch_range = range(len(self.train_accuracies_))
         if include_batch_accuracies:
             ax.plot(batch_range, self.batch_accuracies_,
                     label='mini-batch ' + graph_label, linewidth='0.5')
@@ -311,6 +352,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
             ax.plot(batch_range, self.train_accuracies_, label=graph_label,
                     linewidth='1')
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.close(fig)
         return fig, ax
 
     def predict(self, X):
@@ -591,7 +633,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        best_accuracy : RuleNetworkClassifier
+        best_accuracy : float
             Returns accuracy on mini-batch (X, y).
         """
         base_accuracy = accuracy_score(y, self.predict(X))
@@ -602,7 +644,9 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
         optimal = False
         flip_count = 0
 
-        while not optimal and flip_count < self.max_flips:
+        max_flips = (np.iinfo(np.int32).max if self.max_flips is None else
+                     self.max_flips)
+        while not optimal and flip_count < max_flips:
             optimal = True
 
             # evaluate flips in the first layer
@@ -620,8 +664,10 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                             best_k = k
                         self._flip_feature(j, k, dependent_j)
 
-            # evaluate flips in all other layers (except the last one)
-            for i in range(1, self.n_layers - 2):
+            # evaluate flips in all other layers (except the last one if
+            # optimize_last_layer_separately is true)
+            for i in range(1, self.n_layers - 1 -
+                           self.optimize_last_layer_separately):
                 for j in range(self.layer_units[i]):
                     for k in range(self.layer_units[i + 1]):
                         self.coefs_[i][j][k] = not self.coefs_[i][j][k]

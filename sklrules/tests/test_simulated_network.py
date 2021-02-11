@@ -1,6 +1,7 @@
 import cProfile
 import itertools
 import logging
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import random
@@ -41,36 +42,6 @@ def _setup_logging():
     logger.setLevel(logging.DEBUG)
 
 
-_setup_logging()
-
-RANDOM_STATE = 0  # only used for StratifiedKFold
-START_SEED = 0
-N_FOLDS = 2
-N_REPETITIONS = 1
-POS_CLASS_METHOD = 'boolean'  # 'boolean', 'least-frequent' or 'most-frequent'
-NOISE = 0.0
-
-AVG_RULE_LENGTH_DRNC_1 = 1
-AVG_RULE_LENGTH_DRNC_2 = 2
-AVG_RULE_LENGTH_RNC_1 = 5
-AVG_RULE_LENGTH_RNC_2 = 7
-INIT_PROB_1 = 0.0
-INIT_PROB_2 = 0.1
-HIDDEN_LAYER_SIZES = [32, 16, 8, 4, 2]
-N_RULES_1 = 50
-N_RULES_2 = 200
-PLOT_COMPLEX_MODEL = False
-PLOT_SIMPLE_MODEL = False
-PLOT_ACCURACIES = True
-KEYS = ['test_score']  # subset of ['fit_time', 'score_time', 'test_score']
-
-ts = TypeSelector(np.number, False)
-ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
-skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
-
-metrics = defaultdict(lambda: np.ndarray([0]))
-
-
 def test():
     X = pd.DataFrame(itertools.product([False, True], repeat=10),
                      columns=['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'])
@@ -91,53 +62,30 @@ def test():
         _print_estimator_model(simulated_network)
         fig, ax = [None] * N_FOLDS, [None] * N_FOLDS
 
-        drnc1 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=HIDDEN_LAYER_SIZES,
-            avg_rule_length=AVG_RULE_LENGTH_DRNC_1, init_prob=INIT_PROB_1,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(drnc1, 'DRNC1', X, y, fit_params, fig, ax)
-
-        drnc2 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=HIDDEN_LAYER_SIZES,
-            avg_rule_length=AVG_RULE_LENGTH_DRNC_2, init_prob=INIT_PROB_1,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(drnc2, 'DRNC2', X, y, fit_params, fig, ax)
-
-        drnc3 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=HIDDEN_LAYER_SIZES,
-            avg_rule_length=AVG_RULE_LENGTH_DRNC_1, init_prob=INIT_PROB_2,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(drnc3, 'DRNC3', X, y, fit_params, fig, ax)
-
-        drnc4 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=HIDDEN_LAYER_SIZES,
-            avg_rule_length=AVG_RULE_LENGTH_DRNC_2, init_prob=INIT_PROB_2,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(drnc4, 'DRNC4', X, y, fit_params, fig, ax)
-
-        rnc1 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=[N_RULES_1],
-            avg_rule_length=AVG_RULE_LENGTH_RNC_1,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(rnc1, 'RNC1', X, y, fit_params, fig, ax)
-
-        rnc2 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=[N_RULES_1],
-            avg_rule_length=AVG_RULE_LENGTH_RNC_2,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(rnc2, 'RNC2', X, y, fit_params, fig, ax)
-
-        rnc3 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=[N_RULES_2],
-            avg_rule_length=AVG_RULE_LENGTH_RNC_1,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(rnc3, 'RNC3', X, y, fit_params, fig, ax)
-
-        rnc4 = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=[N_RULES_2],
-            avg_rule_length=AVG_RULE_LENGTH_RNC_2,
-            pos_class_method=POS_CLASS_METHOD, random_state=seed + 1)
-        fig, ax = _test_estimator(rnc4, 'RNC4', X, y, fit_params, fig, ax)
+        for hidden_layer_sizes in HIDDEN_LAYER_SIZES:
+            if len(hidden_layer_sizes) == 1:
+                for avg_rule_length in AVG_RULE_LENGTHS_RNC:
+                    rnc = DeepRuleNetworkClassifier(
+                        hidden_layer_sizes=hidden_layer_sizes,
+                        avg_rule_length=avg_rule_length,
+                        pos_class_method=POS_CLASS_METHOD,
+                        random_state=seed + 1)
+                    fig, ax = _test_estimator(
+                        rnc, f'RNC_{hidden_layer_sizes}_{avg_rule_length}',
+                        X, y, fit_params, fig, ax)
+            else:
+                for avg_rule_length in AVG_RULE_LENGTHS_DRNC:
+                    for init_prob in INIT_PROBS:
+                        drnc = DeepRuleNetworkClassifier(
+                            hidden_layer_sizes=hidden_layer_sizes,
+                            avg_rule_length=avg_rule_length,
+                            init_prob=init_prob,
+                            pos_class_method=POS_CLASS_METHOD,
+                            random_state=seed + 1)
+                        fig, ax = _test_estimator(
+                            drnc, f'DRNC_{hidden_layer_sizes}_'
+                                  f'{avg_rule_length}_{init_prob}', X,
+                            y, fit_params, fig, ax)
 
         ripper = lw.RIPPER(random_state=RANDOM_STATE)
         metrics_ripper = cross_validate(ripper, X, y, cv=skf,
@@ -146,8 +94,11 @@ def test():
 
         if PLOT_ACCURACIES:
             for fold in range(N_FOLDS):
+                # noinspection PyUnresolvedReferences
                 fig[fold].savefig(f'{seed}_{fold}.png', bbox_inches='tight')
+                plt.close('all')
         print()
+        print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
@@ -159,7 +110,7 @@ def _simulate_network(X, seed):
     while pos_ratio > 0.8 or pos_ratio < 0.2:
         seed += 1
         simulated_network = DeepRuleNetworkClassifier(
-            hidden_layer_sizes=HIDDEN_LAYER_SIZES,
+            hidden_layer_sizes=HIDDEN_LAYER_SIZES_SIMULATED_NETWORK,
             avg_rule_length=2,
             pos_class_method=POS_CLASS_METHOD, random_state=seed)
         simulated_network.fit(X[:2], [False, True], ohe.attributes_,
@@ -216,8 +167,37 @@ def _process_dataset(dataset):
     return X, y, target
 
 
-with cProfile.Profile() as pr:
-    test()
+RANDOM_STATE = 0  # only used for StratifiedKFold
+START_SEED = 0
+N_FOLDS = 2
+N_REPETITIONS = 20
+POS_CLASS_METHOD = 'boolean'  # 'boolean', 'least-frequent' or 'most-frequent'
+NOISE = 0.0
 
-sys.stdout = open('test.prof', 'w')
-pr.print_stats(sort='tottime')
+HIDDEN_LAYER_SIZES_SIMULATED_NETWORK = [32, 16, 8, 4, 2]
+HIDDEN_LAYER_SIZES = [[32, 16, 8, 4, 2], [32, 8, 2], [50], [20]]
+AVG_RULE_LENGTHS_DRNC = [2, 3]
+AVG_RULE_LENGTHS_RNC = [4, 5]
+INIT_PROBS = [0.05]
+
+PLOT_COMPLEX_MODEL = False
+PLOT_SIMPLE_MODEL = False
+PLOT_ACCURACIES = True
+# subset of ['fit_time', 'score_time', 'test_score']
+KEYS = ['fit_time', 'test_score']
+
+ts = TypeSelector(np.number, False)
+ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
+skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+
+metrics = defaultdict(lambda: np.ndarray([0]))
+
+
+if __name__ == '__main__':
+    _setup_logging()
+
+    with cProfile.Profile() as pr:
+        test()
+
+    sys.stdout = open('test.prof', 'w')
+    pr.print_stats(sort='tottime')
