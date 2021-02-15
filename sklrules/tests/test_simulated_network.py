@@ -10,6 +10,7 @@ import sys
 import wittgenstein as lw
 
 from collections import defaultdict
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklrules import DeepRuleNetworkClassifier, OneHotEncoder, TypeSelector
 from sympy.logic.boolalg import to_dnf
@@ -92,7 +93,11 @@ def test():
                                         fit_params={'pos_class': True})
         _add_metrics(metrics_ripper, 'RIPPER')
 
-        if PLOT_ACCURACIES:
+        decision_tree = DecisionTreeClassifier()
+        metrics_decision_tree = cross_validate(decision_tree, X, y, cv=skf)
+        _add_metrics(metrics_decision_tree, 'Tree')
+
+        if PLOT_ACCURACIES and all(fig):
             for fold in range(N_FOLDS):
                 # noinspection PyUnresolvedReferences
                 fig[fold].savefig(f'{seed}_{fold}.png', bbox_inches='tight')
