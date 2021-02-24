@@ -142,7 +142,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
                  first_layer_conjunctive=True, avg_rule_length=3,
-                 init_prob=0.2, n_epochs=None, batch_size=50, max_flips=None,
+                 init_prob=0.2, n_epochs=1, batch_size=50, max_flips=None,
                  optimize_last_layer_separately=False,
                  pos_class_method='least-frequent',
                  plot_accuracies=False, random_state=None):

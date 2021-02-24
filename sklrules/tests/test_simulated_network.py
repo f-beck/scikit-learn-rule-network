@@ -163,15 +163,6 @@ def _to_sympy_syntax(f):
     return f
 
 
-def _process_dataset(dataset):
-    df = pd.read_csv('data/' + dataset + '.csv')
-    df = df.replace('?', np.NaN)
-    X = df.iloc[:, :-1]
-    y = df.iloc[:, -1:].values.ravel()
-    target = list(df)[-1]
-    return X, y, target
-
-
 RANDOM_STATE = 0  # only used for StratifiedKFold
 START_SEED = 0
 N_FOLDS = 2
