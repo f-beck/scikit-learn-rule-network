@@ -142,7 +142,7 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, init_method='probabilistic', hidden_layer_sizes=None,
                  first_layer_conjunctive=True, avg_rule_length=3,
-                 init_prob=0.2, n_epochs=1, batch_size=50, max_flips=None,
+                 init_prob=0.2, n_epochs=5, batch_size=50, max_flips=None,
                  optimize_last_layer_separately=False,
                  pos_class_method='least-frequent',
                  plot_accuracies=False, random_state=None):
@@ -356,7 +356,6 @@ class DeepRuleNetworkClassifier(BaseEstimator, ClassifierMixin):
                     label='mini-batch ' + graph_label, linewidth='0.5')
         ax.plot(batch_range, self.train_accuracies_, label=graph_label,
                 linewidth='1')
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.close(fig)
         return fig, ax
 
