@@ -50,11 +50,13 @@ def test_hierarchical_data():
             'target': target
         }
 
+        pos_ratio, pos_class = _calculate_pos_ratio(y)
         metrics['positive\nratio'] = \
-            np.append(metrics['positive\nratio'], _calculate_pos_ratio(y))
+            np.append(metrics['positive\nratio'], pos_ratio)
 
         fig, ax = _test_all_estimators(X, X_ohe, y, fit_params,
-                                       POS_CLASS_METHOD, RANDOM_STATE)
+                                       POS_CLASS_METHOD, pos_class,
+                                       RANDOM_STATE)
         _generate_plots(fig, ax, dataset)
 
         print()
@@ -83,7 +85,7 @@ def test_simulated_network():
         _print_estimator_model(simulated_network)
 
         fig, ax = _test_all_estimators(X, X_ohe, y, fit_params, 'boolean',
-                                       seed + 1)
+                                       True, seed + 1)
         _generate_plots(fig, ax, seed)
 
         print()
@@ -113,7 +115,7 @@ def _calculate_pos_ratio(y):
         pos_class = str(classes[class_counts.argmin()])
     pos_ratio = np.count_nonzero(y) / len(y) if y.dtype == 'bool' else \
         np.count_nonzero(y == pos_class) / len(y)
-    return pos_ratio
+    return pos_ratio, pos_class
 
 
 def _simulate_network(X, seed):
@@ -151,7 +153,7 @@ def _generate_plots(fig, ax, seed):
             plt.close('all')
 
 
-def _test_all_estimators(X, X_ohe, y, fit_params, pos_class_method,
+def _test_all_estimators(X, X_ohe, y, fit_params, pos_class_method, pos_class,
                          random_state):
     fig, ax = [None] * N_FOLDS, [None] * N_FOLDS
     for hidden_layer_sizes in HIDDEN_LAYER_SIZES:
@@ -179,13 +181,13 @@ def _test_all_estimators(X, X_ohe, y, fit_params, pos_class_method,
 
     ripper = lw.RIPPER(random_state=RANDOM_STATE)
     metrics_ripper = cross_validate(ripper, X_ohe, y, cv=skf,
-                                    fit_params={'pos_class': True})
+                                    fit_params={'pos_class': pos_class})
     _add_metrics(metrics_ripper, 'RIPPER')
     metrics_ripper = cross_validate(ripper, X, y, cv=skf,
-                                    fit_params={'pos_class': True})
+                                    fit_params={'pos_class': pos_class})
     _add_metrics(metrics_ripper, 'RIPPER(orig. data)')
 
-    decision_tree = DecisionTreeClassifier()
+    decision_tree = DecisionTreeClassifier(random_state=RANDOM_STATE)
     metrics_decision_tree = cross_validate(decision_tree, X_ohe, y, cv=skf)
     _add_metrics(metrics_decision_tree, 'Tree')
 
