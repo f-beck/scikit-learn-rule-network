@@ -150,16 +150,22 @@ def _generate_avg_plot(ax):
     n_graphs = len(HIDDEN_LAYER_SIZES)
     if N_REPETITIONS and N_FOLDS and n_graphs:
         labels = [ax[0][0].lines[i].get_label() for i in range(n_graphs)]
-        x_data = ax[0][0].lines[0].get_xdata()
-        y_data = [[[ax[i][j].lines[graph].get_ydata() for graph in range(
-            n_graphs)] for j in range(N_FOLDS)] for i in range(N_REPETITIONS)]
+        # find max number of data points in graph
+        n_data = max([len(ax[i][j].lines[graph].get_xdata()) for graph in range(
+            n_graphs) for j in range(N_FOLDS) for i in range(N_REPETITIONS)])
+        # fill graphs having less data points with their last value
+        y_data = [[[np.pad(ax[i][j].lines[graph].get_ydata(),
+                           (0, n_data - len(ax[i][j].lines[graph].get_ydata())),
+                    'edge') for graph in range(n_graphs)] for j in range(
+            N_FOLDS)] for i in range(N_REPETITIONS)]
         avg_accuracies = np.mean(y_data, axis=(0, 1))
 
         avg_fig, avg_ax = plt.subplots()
         avg_ax.set(xlabel='Mini-batch', ylabel='Accuracy',
                    title='Average accuracy over number of mini-batches')
         for (graph_data, graph_label) in zip(avg_accuracies, labels):
-            avg_ax.plot(x_data, graph_data, label=graph_label, linewidth='1')
+            avg_ax.plot(range(1, n_data), graph_data[1:], label=graph_label,
+                        linewidth='1')
         _format_plot(avg_fig, avg_ax, 'average')
         plt.close(avg_fig)
 
