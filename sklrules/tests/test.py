@@ -77,19 +77,23 @@ def test_simulated_network():
     }
 
     seed = START_SEED
-    for _ in range(N_REPETITIONS):
+    fig, ax = [[None] * N_FOLDS] * N_REPETITIONS, \
+              [[None] * N_FOLDS] * N_REPETITIONS
+    for i in range(N_REPETITIONS):
         simulated_network, y, seed, pos_ratio = _simulate_network(X_ohe, seed)
         metrics['dataset'] = np.append(metrics['dataset'], seed)
         metrics['positive\nratio'] = \
             np.append(metrics['positive\nratio'], pos_ratio)
         _print_estimator_model(simulated_network)
 
-        fig, ax = _test_all_estimators(X, X_ohe, y, fit_params, 'boolean',
-                                       True, seed + 1)
-        _generate_plots(fig, ax, seed)
+        fig[i], ax[i] = _test_all_estimators(X, X_ohe, y, fit_params,
+                                             'boolean', True, seed + 1)
+        _generate_plots(fig[i], ax[i], seed)
 
         print()
         print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
+
+    _generate_avg_plot(ax)
 
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
@@ -139,18 +143,36 @@ def _simulate_network(X, seed):
 def _generate_plots(fig, ax, seed):
     if PLOT_ACCURACIES and all(fig):
         for fold in range(N_FOLDS):
-            # noinspection PyUnresolvedReferences
-            for line, marker, linestyle in zip(
-                    ax[fold].lines, itertools.cycle('o^sPD'),
-                    itertools.cycle(["-", "--", "-.", ":"])):
-                line.set_marker(marker)
-                line.set_linestyle(linestyle)
-            # noinspection PyUnresolvedReferences
-            ax[fold].legend(loc='center left', bbox_to_anchor=(1, 0.5))
-            # noinspection PyUnresolvedReferences
-            fig[fold].savefig(f'plots/{seed}_{fold}.png',
-                              bbox_inches='tight')
-            plt.close('all')
+            _format_plot(fig[fold], ax[fold], f'{seed}_{fold}')
+
+
+def _generate_avg_plot(ax):
+    n_graphs = len(HIDDEN_LAYER_SIZES)
+    if N_REPETITIONS and N_FOLDS and n_graphs:
+        labels = [ax[0][0].lines[i].get_label() for i in range(n_graphs)]
+        x_data = ax[0][0].lines[0].get_xdata()
+        y_data = [[[ax[i][j].lines[graph].get_ydata() for graph in range(
+            n_graphs)] for j in range(N_FOLDS)] for i in range(N_REPETITIONS)]
+        avg_accuracies = np.mean(y_data, axis=(0, 1))
+
+        avg_fig, avg_ax = plt.subplots()
+        avg_ax.set(xlabel='Mini-batch', ylabel='Accuracy',
+                   title='Average accuracy over number of mini-batches')
+        for (graph_data, graph_label) in zip(avg_accuracies, labels):
+            avg_ax.plot(x_data, graph_data, label=graph_label, linewidth='1')
+        _format_plot(avg_fig, avg_ax, 'average')
+        plt.close(avg_fig)
+
+
+def _format_plot(fig, ax, name):
+    for line, marker, linestyle in zip(
+            ax.lines, itertools.cycle('o^sPD'),
+            itertools.cycle(["-", "--", "-.", ":"])):
+        line.set_marker(marker)
+        line.set_linestyle(linestyle)
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    fig.savefig(f'plots/{name}.png', bbox_inches='tight')
+    plt.close('all')
 
 
 def _test_all_estimators(X, X_ohe, y, fit_params, pos_class_method, pos_class,
