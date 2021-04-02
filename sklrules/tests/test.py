@@ -93,7 +93,10 @@ def test_simulated_network():
         print()
         print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
-    _generate_avg_plot(ax)
+    _generate_avg_plot(ax, 0, 0, 'average_0_0')
+    _generate_avg_plot(ax, 0, 1, 'average_0_1')
+    _generate_avg_plot(ax, 1, 0, 'average_1_0')
+    _generate_avg_plot(ax, 1, 1, 'average_1_1')
 
     print('\n', tabulate(metrics, headers='keys', floatfmt='.4f'), sep='')
 
@@ -146,7 +149,7 @@ def _generate_plots(fig, ax, seed):
             _format_plot(fig[fold], ax[fold], f'{seed}_{fold}')
 
 
-def _generate_avg_plot(ax):
+def _generate_avg_plot(ax, exclude_first, exclude_last, name='average'):
     n_graphs = len(HIDDEN_LAYER_SIZES)
     if N_REPETITIONS and N_FOLDS and n_graphs:
         labels = [ax[0][0].lines[i].get_label() for i in range(n_graphs)]
@@ -159,24 +162,32 @@ def _generate_avg_plot(ax):
                     'edge') for graph in range(n_graphs)] for j in range(
             N_FOLDS)] for i in range(N_REPETITIONS)]
         avg_accuracies = np.mean(y_data, axis=(0, 1))
+        print(avg_accuracies)
 
         avg_fig, avg_ax = plt.subplots()
         avg_ax.set(xlabel='Mini-batch', ylabel='Accuracy',
                    title='Average accuracy over number of mini-batches')
+        labels = ['DRNC(5)', 'DRNC(3)', 'RNC']
         for (graph_data, graph_label) in zip(avg_accuracies, labels):
-            avg_ax.plot(range(1, n_data), graph_data[1:], label=graph_label,
-                        linewidth='1')
-        _format_plot(avg_fig, avg_ax, 'average')
+            if exclude_last:
+                avg_ax.plot(range(exclude_first, n_data - exclude_last),
+                            graph_data[exclude_first:-exclude_last],
+                            label=graph_label, linewidth='1')
+            else:
+                avg_ax.plot(range(exclude_first, n_data),
+                            graph_data[exclude_first:],
+                            label=graph_label, linewidth='1')
+        _format_plot(avg_fig, avg_ax, name)
         plt.close(avg_fig)
 
 
 def _format_plot(fig, ax, name):
     for line, marker, linestyle in zip(
-            ax.lines, itertools.cycle('o^sPD'),
+            ax.lines, itertools.cycle('so^PD'),
             itertools.cycle(["-", "--", "-.", ":"])):
         line.set_marker(marker)
         line.set_linestyle(linestyle)
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.legend(loc='lower right')
     fig.savefig(f'plots/{name}.png', bbox_inches='tight')
     plt.close('all')
 
