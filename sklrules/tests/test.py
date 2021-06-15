@@ -81,6 +81,10 @@ def test_simulated_network():
               [[None] * N_FOLDS] * N_REPETITIONS
     for i in range(N_REPETITIONS):
         simulated_network, y, seed, pos_ratio = _simulate_network(X_ohe, seed)
+        if SAVE_CSV:
+            Xy = X.copy()
+            Xy['class'] = y
+            Xy.to_csv(f'data/{seed}.csv', index=False)
         metrics['dataset'] = np.append(metrics['dataset'], seed)
         metrics['positive\nratio'] = \
             np.append(metrics['positive\nratio'], pos_ratio)
@@ -293,6 +297,7 @@ INIT_PROBS = [0.05]
 PLOT_COMPLEX_MODEL = False
 PLOT_SIMPLE_MODEL = False
 PLOT_ACCURACIES = True
+SAVE_CSV = True
 # subset of ['fit_time', 'score_time', 'test_score']
 KEYS = ['fit_time', 'test_score']
 
