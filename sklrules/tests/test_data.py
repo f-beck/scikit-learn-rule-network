@@ -22,12 +22,12 @@ def _setup_logging():
         'sklrules._deep_rule_network.DeepRuleNetworkClassifier')
     logger.addHandler(fh)
     logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler('drnc_models.log')
+    fh = logging.FileHandler('logs/drnc_models.log')
     fh.setLevel(logging.INFO)
     fh.setFormatter(f)
     logger.addHandler(fh)
     # ... for rnc
-    fh = logging.FileHandler('rnc.log')
+    fh = logging.FileHandler('logs/rnc.log')
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(f)
     logger = logging.getLogger(
