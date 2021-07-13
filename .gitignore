@@ -67,3 +67,4 @@ doc/generated/
 target/
 *.png
 *.prof
+.idea/*

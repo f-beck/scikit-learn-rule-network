@@ -121,7 +121,7 @@ def _calculate_pos_ratio(y):
     elif POS_CLASS_METHOD == 'least-frequent':
         pos_class = str(classes[class_counts.argmin()])
     elif POS_CLASS_METHOD == 'boolean':
-        pos_class = 'True'
+        pos_class = True
     else:  # use least-frequent
         pos_class = str(classes[class_counts.argmin()])
     pos_ratio = np.count_nonzero(y) / len(y) if y.dtype == 'bool' else \
@@ -258,7 +258,7 @@ def _add_metrics(metrics_learner, name):
 def _print_estimator_model(metrics_learner):
     model = metrics_learner.print_model(style='tree')
     if PLOT_COMPLEX_MODEL:
-        print(_to_sympy_syntax(model))
+        print(_to_sympy_syntax(metrics_learner.print_model(style='prolog')))
     if PLOT_SIMPLE_MODEL:
         print(_get_simplified_model(_to_sympy_syntax(model)))
 
@@ -275,7 +275,7 @@ def _to_sympy_syntax(f):
 
 # hyperparameters for hierarchical data test
 DATASETS = ['car-evaluation-binary', 'connect-4-binary', 'kr-vs-kp',
-            'mushroom', 'tic-tac-toe', 'vote']
+            'monk-1', 'monk-2', 'monk-3', 'mushroom', 'tic-tac-toe', 'vote']
 MAX_SAMPLES = 4000
 POS_CLASS_METHOD = 'most-frequent'  # 'boolean', 'least-frequent' or
 # 'most-frequent'
@@ -299,7 +299,7 @@ PLOT_SIMPLE_MODEL = False
 PLOT_ACCURACIES = True
 SAVE_CSV = True
 # subset of ['fit_time', 'score_time', 'test_score']
-KEYS = ['fit_time', 'test_score']
+KEYS = ['test_score']
 
 ts = TypeSelector(np.number, False)
 ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
